@@ -1,0 +1,979 @@
+// =============================================================
+//  TuHora — Prisma Schema
+//  Traducido del DBML: dbdiagram_red_espacios_flexibles.dbml.txt
+//  Generado para: PostgreSQL 16
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ENUMS
+// ═══════════════════════════════════════════════════════════
+
+enum UserRole {
+  OWNER
+  PROFESSIONAL
+  CLIENT
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum OAuthProvider {
+  GOOGLE
+  APPLE
+}
+
+enum VerificationChannel {
+  EMAIL
+  PHONE
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
+enum ProfValidationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum CommissionTier {
+  STANDARD
+  SILVER
+  GOLD
+}
+
+enum DocType {
+  DNI
+  MATRICULA
+  CERTIFICADO
+  HABILITACION_COMERCIAL
+  CONSTANCIA_AFIP
+}
+
+enum DocStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ClientLevel {
+  BRONCE
+  PLATA
+  ORO
+  PLATINO
+}
+
+enum SpaceType {
+  CHAIR
+  BED
+  OFFICE
+  ROOM
+}
+
+enum SpaceStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum SpaceBookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum ReminderChannel {
+  PUSH
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CARD
+  WALLET
+  TRANSFER
+  CASH
+  MERCADO_PAGO
+}
+
+enum SplitRole {
+  OWNER
+  PROFESSIONAL
+  PLATFORM
+}
+
+enum SplitStatus {
+  PENDING
+  LIQUIDATED
+  HELD
+}
+
+enum PointsReason {
+  SERVICE_COMPLETED
+  REFERRAL
+  FIRST_BOOKING
+  REVIEW_POSTED
+  REWARD_REDEEMED
+  WHEEL_SPIN_COST
+  WHEEL_SPIN_REWARD
+  ADMIN_ADJUST
+}
+
+enum RewardType {
+  DISCOUNT
+  FREE_SERVICE
+  POINTS
+  SPIN_WHEEL
+}
+
+enum DiscountType {
+  PERCENTAGE
+  AMOUNT
+}
+
+enum NotificationType {
+  BOOKING_APPROVED
+  BOOKING_REJECTED
+  APPOINTMENT_REMINDER
+  APPOINTMENT_CANCELLED
+  PAYMENT_RECEIVED
+  POINTS_EARNED
+  REVIEW_PUBLISHED
+  PROMO_AVAILABLE
+  VERIFICATION_APPROVED
+  VERIFICATION_REJECTED
+  SPACE_REQUEST
+}
+
+enum DeliveryChannel {
+  PUSH
+  EMAIL
+  WHATSAPP
+  IN_APP
+  SMS
+}
+
+// ═══════════════════════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════════════════════
+
+model User {
+  id                  String     @id @default(uuid())
+  email               String     @unique
+  passwordHash        String?    @map("password_hash")
+  phone               String?
+  role                UserRole
+  status              UserStatus @default(PENDING)
+  avatarUrl           String?    @map("avatar_url")
+  emailVerifiedAt     DateTime?  @map("email_verified_at")
+  phoneVerifiedAt     DateTime?  @map("phone_verified_at")
+  termsAcceptedAt     DateTime?  @map("terms_accepted_at")
+  lastLoginAt         DateTime?  @map("last_login_at")
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until")
+  deletedAt           DateTime?  @map("deleted_at")
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+
+  ownerProfile        OwnerProfile?
+  professionalProfile ProfessionalProfile?
+  clientProfile       ClientProfile?
+  sessions            AuthSession[]
+  socialAccounts      SocialAccount[]
+  passwordResets      PasswordResetToken[]
+  verificationTokens  VerificationToken[]
+  deviceTokens        DeviceToken[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status, deletedAt])
+  @@map("users")
+}
+
+model AuthSession {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  refreshToken String    @unique @map("refresh_token")
+  userAgent    String?   @map("user_agent")
+  ipAddress    String?   @map("ip_address")
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model SocialAccount {
+  id          String        @id @default(uuid())
+  userId      String        @map("user_id")
+  provider    OAuthProvider
+  providerUid String        @map("provider_uid")
+  emailAtLink String?       @map("email_at_link")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUid])
+  @@index([userId])
+  @@map("social_accounts")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model VerificationToken {
+  id         String              @id @default(uuid())
+  userId     String              @map("user_id")
+  channel    VerificationChannel
+  tokenHash  String              @unique @map("token_hash")
+  expiresAt  DateTime            @map("expires_at")
+  consumedAt DateTime?           @map("consumed_at")
+  createdAt  DateTime            @default(now()) @map("created_at")
+
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("verification_tokens")
+}
+
+model DeviceToken {
+  id          String         @id @default(uuid())
+  userId      String         @map("user_id")
+  deviceToken String         @map("device_token")
+  platform    DevicePlatform
+  appVersion  String?        @map("app_version")
+  lastUsedAt  DateTime       @default(now()) @map("last_used_at")
+  isActive    Boolean        @default(true) @map("is_active")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceToken, platform])
+  @@index([userId])
+  @@map("device_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PERFILES
+// ═══════════════════════════════════════════════════════════
+
+model OwnerProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique @map("user_id")
+  businessName  String   @map("business_name")
+  cuit          String?  @unique
+  businessPhone String?  @map("business_phone")
+  address       String
+  city          String
+  province      String
+  country       String   @default("Argentina")
+  lat           Decimal? @db.Decimal(9, 6)
+  lng           Decimal? @db.Decimal(9, 6)
+  description   String?
+  instagramUrl  String?  @map("instagram_url")
+  websiteUrl    String?  @map("website_url")
+  autoApprove   Boolean  @default(false) @map("auto_approve")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spaces              Space[]
+  spaceBookings       SpaceBooking[]
+  analyticsSnapshots  OwnerAnalyticsSnapshot[]
+
+  @@index([city])
+  @@map("owner_profiles")
+}
+
+model ProfessionalProfile {
+  id               String               @id @default(uuid())
+  userId           String               @unique @map("user_id")
+  firstName        String               @map("first_name")
+  lastName         String               @map("last_name")
+  bio              String?
+  specialty        String
+  categoryId       String               @map("category_id")
+  publicSlug       String               @unique @map("public_slug")
+  isVisible        Boolean              @default(true) @map("is_visible")
+  yearsExperience  Int?                 @map("years_experience")
+  instagramUrl     String?              @map("instagram_url")
+  websiteUrl       String?              @map("website_url")
+  validationStatus ProfValidationStatus @default(PENDING) @map("validation_status")
+  validatedAt      DateTime?            @map("validated_at")
+  validatedById    String?              @map("validated_by") // FK → users.id (admin)
+  commissionRate   Decimal              @default(15.00) @db.Decimal(5, 2) @map("commission_rate")
+  monthlyBookings  Int                  @default(0) @map("monthly_bookings")
+  commissionTier   CommissionTier       @default(STANDARD) @map("commission_tier")
+  averageRating    Decimal              @default(0) @db.Decimal(3, 2) @map("average_rating")
+  totalReviews     Int                  @default(0) @map("total_reviews")
+  totalCompleted   Int                  @default(0) @map("total_completed")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category         Category             @relation(fields: [categoryId], references: [id])
+  documents        ProfessionalDocument[]
+  services         ProfessionalService[]
+  availability     ProfessionalAvailability[]
+  spaceBookings    SpaceBooking[]
+  appointments     Appointment[]
+  reviews          Review[]
+  favorites        ClientFavorite[]
+  milestones       CommissionMilestone[]
+  promotions       Promotion[]
+
+  @@index([categoryId])
+  @@index([isVisible, validationStatus])
+  @@map("professional_profiles")
+}
+
+model ProfessionalDocument {
+  id             String              @id @default(uuid())
+  professionalId String              @map("professional_id")
+  documentType   DocType             @map("document_type")
+  fileUrl        String              @map("file_url")
+  status         DocStatus           @default(PENDING)
+  reviewedById   String?             @map("reviewed_by") // FK → users.id (admin)
+  reviewedAt     DateTime?           @map("reviewed_at")
+  notes          String?
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+  @@index([status])
+  @@map("professional_documents")
+}
+
+model ClientProfile {
+  id             String      @id @default(uuid())
+  userId         String      @unique @map("user_id")
+  firstName      String      @map("first_name")
+  lastName       String      @map("last_name")
+  birthdate      DateTime?   @db.Date
+  pointsBalance  Int         @default(0) @map("points_balance")
+  currentLevel   ClientLevel @default(BRONCE) @map("current_level")
+  noShowCount    Int         @default(0) @map("no_show_count")
+  totalBookings  Int         @default(0) @map("total_bookings")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments      Appointment[]
+  pointsTransactions PointsTransaction[]
+  rewardRedemptions RewardRedemption[]
+  wheelSpins        WheelSpin[]
+  favorites         ClientFavorite[]
+  noShowPenalties   NoShowPenalty[]
+  reviews           Review[]
+
+  @@map("client_profiles")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CATÁLOGO
+// ═══════════════════════════════════════════════════════════
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  iconUrl     String?   @map("icon_url")
+  colorHex    String?   @map("color_hex")
+  sortOrder   Int       @default(0) @map("sort_order")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  spaces        Space[]
+  professionals ProfessionalProfile[]
+  services      ProfessionalService[]
+
+  @@map("categories")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ESPACIOS
+// ═══════════════════════════════════════════════════════════
+
+model Space {
+  id             String      @id @default(uuid())
+  ownerId        String      @map("owner_id")
+  categoryId     String      @map("category_id")
+  name           String
+  spaceType      SpaceType   @map("space_type")
+  description    String?
+  capacity       Int         @default(1)
+  basePriceHour  Decimal     @db.Decimal(10, 2) @map("base_price_hour")
+  status         SpaceStatus @default(ACTIVE)
+  averageRating  Decimal     @default(0) @db.Decimal(3, 2) @map("average_rating")
+  totalBookings  Int         @default(0) @map("total_bookings")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  owner          OwnerProfile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  category       Category    @relation(fields: [categoryId], references: [id])
+  photos         SpacePhoto[]
+  amenities      SpaceAmenity[]
+  availability   SpaceAvailability[]
+  exceptions     SpaceAvailabilityException[]
+  bookings       SpaceBooking[]
+
+  @@index([ownerId])
+  @@index([categoryId, status])
+  @@map("spaces")
+}
+
+model SpacePhoto {
+  id        String   @id @default(uuid())
+  spaceId   String   @map("space_id")
+  url       String
+  isPrimary Boolean  @default(false) @map("is_primary")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@map("space_photos")
+}
+
+model SpaceAmenity {
+  id        String   @id @default(uuid())
+  spaceId   String   @map("space_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@map("space_amenities")
+}
+
+model SpaceAvailability {
+  id          String   @id @default(uuid())
+  spaceId     String   @map("space_id")
+  dayOfWeek   Int      @map("day_of_week")
+  openTime    String   @map("open_time")  // "HH:MM"
+  closeTime   String   @map("close_time") // "HH:MM"
+  isAvailable Boolean  @default(true) @map("is_available")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, dayOfWeek])
+  @@map("space_availability")
+}
+
+model SpaceAvailabilityException {
+  id            String    @id @default(uuid())
+  spaceId       String    @map("space_id")
+  exceptionDate DateTime  @db.Date @map("exception_date")
+  isAvailable   Boolean   @default(false) @map("is_available")
+  openTime      String?   @map("open_time")
+  closeTime     String?   @map("close_time")
+  reason        String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  space         Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, exceptionDate])
+  @@map("space_availability_exceptions")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SERVICIOS DEL PROFESIONAL
+// ═══════════════════════════════════════════════════════════
+
+model ProfessionalService {
+  id             String              @id @default(uuid())
+  professionalId String              @map("professional_id")
+  name           String
+  description    String?
+  durationMin    Int                 @map("duration_min")
+  price          Decimal             @db.Decimal(10, 2)
+  categoryId     String              @map("category_id")
+  isPopular      Boolean             @default(false) @map("is_popular")
+  isActive       Boolean             @default(true) @map("is_active")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  category       Category            @relation(fields: [categoryId], references: [id])
+  appointments   Appointment[]
+  promotions     Promotion[]
+
+  @@index([professionalId, isActive])
+  @@map("professional_services")
+}
+
+model ProfessionalAvailability {
+  id             String              @id @default(uuid())
+  professionalId String              @map("professional_id")
+  dayOfWeek      Int                 @map("day_of_week")
+  startTime      String              @map("start_time") // "HH:MM"
+  endTime        String              @map("end_time")   // "HH:MM"
+  isAvailable    Boolean             @default(true) @map("is_available")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@unique([professionalId, dayOfWeek])
+  @@map("professional_availability")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RESERVAS DE ESPACIO (Profesional → Propietario)
+// ═══════════════════════════════════════════════════════════
+
+model SpaceBooking {
+  id              String             @id @default(uuid())
+  spaceId         String             @map("space_id")
+  professionalId  String             @map("professional_id")
+  ownerId         String             @map("owner_id")
+  startDatetime   DateTime           @map("start_datetime")
+  endDatetime     DateTime           @map("end_datetime")
+  totalHours      Decimal            @db.Decimal(4, 2) @map("total_hours")
+  pricePerHour    Decimal            @db.Decimal(10, 2) @map("price_per_hour")
+  totalAmount     Decimal            @db.Decimal(10, 2) @map("total_amount")
+  status          SpaceBookingStatus @default(PENDING)
+  rejectionReason String?            @map("rejection_reason")
+  autoApproved    Boolean            @default(false) @map("auto_approved")
+  requestedAt     DateTime           @default(now()) @map("requested_at")
+  respondedAt     DateTime?          @map("responded_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  space           Space              @relation(fields: [spaceId], references: [id])
+  professional    ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  owner           OwnerProfile       @relation(fields: [ownerId], references: [id])
+  appointments    Appointment[]
+  transactions    Transaction[]
+
+  @@index([spaceId, startDatetime])
+  @@index([professionalId, startDatetime])
+  @@index([ownerId, status, requestedAt])
+  @@map("space_bookings")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TURNOS (Cliente → Profesional)
+// ═══════════════════════════════════════════════════════════
+
+model Appointment {
+  id                      String            @id @default(uuid())
+  clientId                String            @map("client_id")
+  professionalId          String            @map("professional_id")
+  serviceId               String            @map("service_id")
+  spaceBookingId          String?           @map("space_booking_id")
+  startDatetime           DateTime          @map("start_datetime")
+  endDatetime             DateTime          @map("end_datetime")
+  serviceNameSnapshot     String            @map("service_name_snapshot")
+  serviceDurationSnapshot Int               @map("service_duration_snapshot")
+  servicePriceSnapshot    Decimal           @db.Decimal(10, 2) @map("service_price_snapshot")
+  addressSnapshot         String?           @map("address_snapshot")
+  status                  AppointmentStatus @default(PENDING)
+  qrCode                  String?           @unique @map("qr_code")
+  noShowPenalty           Decimal?          @db.Decimal(10, 2) @map("no_show_penalty")
+  cancellationReason      String?           @map("cancellation_reason")
+  cancelledById           String?           @map("cancelled_by") // FK → users.id
+  cancelledAt             DateTime?         @map("cancelled_at")
+  completedAt             DateTime?         @map("completed_at")
+  createdAt               DateTime          @default(now()) @map("created_at")
+  updatedAt               DateTime          @updatedAt @map("updated_at")
+
+  client                  ClientProfile     @relation(fields: [clientId], references: [id])
+  professional            ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  service                 ProfessionalService @relation(fields: [serviceId], references: [id])
+  spaceBooking            SpaceBooking?     @relation(fields: [spaceBookingId], references: [id])
+  reminders               AppointmentReminder[]
+  transactions            Transaction[]
+  review                  Review?
+  noShowPenalties         NoShowPenalty[]
+  appliedPromotions       AppointmentPromotion[]
+  pointsTransactions      PointsTransaction[]
+  rewardRedemptions       RewardRedemption[]
+
+  @@index([clientId, startDatetime])
+  @@index([professionalId, startDatetime])
+  @@index([status, startDatetime])
+  @@index([qrCode])
+  @@map("appointments")
+}
+
+model AppointmentReminder {
+  id            String         @id @default(uuid())
+  appointmentId String         @map("appointment_id")
+  remindAt      DateTime       @map("remind_at")
+  channel       ReminderChannel
+  sentAt        DateTime?      @map("sent_at")
+  status        ReminderStatus @default(SCHEDULED)
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([status, remindAt])
+  @@index([appointmentId])
+  @@map("appointment_reminders")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PAGOS
+// ═══════════════════════════════════════════════════════════
+
+model Transaction {
+  id                  String            @id @default(uuid())
+  appointmentId       String?           @map("appointment_id")
+  spaceBookingId      String?           @map("space_booking_id")
+  payerUserId         String            @map("payer_user_id") // FK → users.id (sin relación Prisma)
+  parentTransactionId String?           @map("parent_transaction_id")
+  totalAmount         Decimal           @db.Decimal(10, 2) @map("total_amount")
+  currency            String            @default("ARS")
+  status              TransactionStatus @default(PENDING)
+  paymentMethod       PaymentMethod?    @map("payment_method")
+  gatewayReference    String?           @map("gateway_reference")
+  gatewayResponse     Json?             @map("gateway_response")
+  idempotencyKey      String?           @unique @map("idempotency_key")
+  refundReason        String?           @map("refund_reason")
+  processedAt         DateTime?         @map("processed_at")
+  refundedAt          DateTime?         @map("refunded_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  appointment         Appointment?      @relation(fields: [appointmentId], references: [id])
+  spaceBooking        SpaceBooking?     @relation(fields: [spaceBookingId], references: [id])
+  parentTransaction   Transaction?      @relation("Refunds", fields: [parentTransactionId], references: [id])
+  refunds             Transaction[]     @relation("Refunds")
+  splits              PaymentSplit[]
+  noShowPenalties     NoShowPenalty[]
+
+  @@index([appointmentId])
+  @@index([spaceBookingId])
+  @@index([status])
+  @@map("transactions")
+}
+
+model PaymentSplit {
+  id              String      @id @default(uuid())
+  transactionId   String      @map("transaction_id")
+  recipientUserId String      @map("recipient_user_id") // FK → users.id (sin relación Prisma)
+  role            SplitRole
+  amount          Decimal     @db.Decimal(10, 2)
+  percentage      Decimal     @db.Decimal(5, 2)
+  status          SplitStatus @default(PENDING)
+  liquidatedAt    DateTime?   @map("liquidated_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@map("payment_splits")
+}
+
+model NoShowPenalty {
+  id            String        @id @default(uuid())
+  appointmentId String        @map("appointment_id")
+  clientId      String        @map("client_id")
+  amount        Decimal       @db.Decimal(10, 2)
+  transactionId String?       @map("transaction_id")
+  appliedAt     DateTime      @default(now()) @map("applied_at")
+
+  appointment   Appointment   @relation(fields: [appointmentId], references: [id])
+  client        ClientProfile @relation(fields: [clientId], references: [id])
+  transaction   Transaction?  @relation(fields: [transactionId], references: [id])
+
+  @@index([clientId])
+  @@map("no_show_penalties")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GAMIFICACIÓN
+// ═══════════════════════════════════════════════════════════
+
+model PointsTransaction {
+  id            String        @id @default(uuid())
+  clientId      String        @map("client_id")
+  appointmentId String?       @map("appointment_id")
+  pointsDelta   Int           @map("points_delta")
+  reason        PointsReason
+  balanceAfter  Int           @map("balance_after")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  client        ClientProfile @relation(fields: [clientId], references: [id])
+  appointment   Appointment?  @relation(fields: [appointmentId], references: [id])
+
+  @@index([clientId, createdAt])
+  @@map("points_transactions")
+}
+
+model Reward {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  pointsCost  Int          @map("points_cost")
+  rewardType  RewardType   @map("reward_type")
+  discountPct Decimal?     @db.Decimal(5, 2) @map("discount_pct")
+  isActive    Boolean      @default(true) @map("is_active")
+  validUntil  DateTime?    @db.Date @map("valid_until")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  redemptions RewardRedemption[]
+
+  @@map("rewards")
+}
+
+model RewardRedemption {
+  id            String        @id @default(uuid())
+  clientId      String        @map("client_id")
+  rewardId      String        @map("reward_id")
+  pointsSpent   Int           @map("points_spent")
+  appointmentId String?       @map("appointment_id")
+  redeemedAt    DateTime      @default(now()) @map("redeemed_at")
+  expiresAt     DateTime?     @map("expires_at")
+  usedAt        DateTime?     @map("used_at")
+
+  client        ClientProfile @relation(fields: [clientId], references: [id])
+  reward        Reward        @relation(fields: [rewardId], references: [id])
+  appointment   Appointment?  @relation(fields: [appointmentId], references: [id])
+  wheelSpins    WheelSpin[]
+
+  @@index([clientId])
+  @@map("reward_redemptions")
+}
+
+model WheelSpin {
+  id           String            @id @default(uuid())
+  clientId     String            @map("client_id")
+  pointsCost   Int               @default(100) @map("points_cost")
+  prizeLabel   String            @map("prize_label")
+  prizeType    RewardType        @map("prize_type")
+  prizeValue   Decimal?          @db.Decimal(10, 2) @map("prize_value")
+  redemptionId String?           @map("redemption_id")
+  spunAt       DateTime          @default(now()) @map("spun_at")
+
+  client       ClientProfile     @relation(fields: [clientId], references: [id])
+  redemption   RewardRedemption? @relation(fields: [redemptionId], references: [id])
+
+  @@index([clientId, spunAt])
+  @@map("wheel_spins")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PROMOCIONES
+// ═══════════════════════════════════════════════════════════
+
+model Promotion {
+  id                 String              @id @default(uuid())
+  professionalId     String?             @map("professional_id")
+  serviceId          String?             @map("service_id")
+  title              String
+  promoCode          String?             @unique @map("promo_code")
+  discountType       DiscountType        @map("discount_type")
+  discountValue      Decimal             @db.Decimal(10, 2) @map("discount_value")
+  startsAt           DateTime            @map("starts_at")
+  endsAt             DateTime            @map("ends_at")
+  maxRedemptions     Int?                @map("max_redemptions")
+  currentRedemptions Int                 @default(0) @map("current_redemptions")
+  isActive           Boolean             @default(true) @map("is_active")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  professional       ProfessionalProfile? @relation(fields: [professionalId], references: [id])
+  service            ProfessionalService? @relation(fields: [serviceId], references: [id])
+  appointmentPromos  AppointmentPromotion[]
+
+  @@index([isActive, startsAt, endsAt])
+  @@map("promotions")
+}
+
+model AppointmentPromotion {
+  id              String      @id @default(uuid())
+  appointmentId   String      @map("appointment_id")
+  promotionId     String      @map("promotion_id")
+  discountApplied Decimal     @db.Decimal(10, 2) @map("discount_applied")
+  appliedAt       DateTime    @default(now()) @map("applied_at")
+
+  appointment     Appointment @relation(fields: [appointmentId], references: [id])
+  promotion       Promotion   @relation(fields: [promotionId], references: [id])
+
+  @@unique([appointmentId, promotionId])
+  @@map("appointment_promotions")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  NOTIFICACIONES Y REVIEWS
+// ═══════════════════════════════════════════════════════════
+
+model Notification {
+  id            String           @id @default(uuid())
+  userId        String           @map("user_id")
+  type          NotificationType
+  title         String
+  body          String
+  isRead        Boolean          @default(false) @map("is_read")
+  relatedEntity String?          @map("related_entity")
+  relatedId     String?          @map("related_id")
+  actionUrl     String?          @map("action_url")
+  sentVia       DeliveryChannel? @map("sent_via")
+  readAt        DateTime?        @map("read_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model Review {
+  id             String              @id @default(uuid())
+  appointmentId  String              @unique @map("appointment_id")
+  clientId       String              @map("client_id")
+  professionalId String              @map("professional_id")
+  rating         Int
+  comment        String?
+  isPublic       Boolean             @default(true) @map("is_public")
+  reply          String?
+  replyAt        DateTime?           @map("reply_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  appointment    Appointment         @relation(fields: [appointmentId], references: [id])
+  client         ClientProfile       @relation(fields: [clientId], references: [id])
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+
+  @@index([professionalId, isPublic, createdAt])
+  @@map("reviews")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ANALYTICS Y COMISIONES
+// ═══════════════════════════════════════════════════════════
+
+model OwnerAnalyticsSnapshot {
+  id                String       @id @default(uuid())
+  ownerId           String       @map("owner_id")
+  snapshotDate      DateTime     @db.Date @map("snapshot_date")
+  totalBookings     Int          @default(0) @map("total_bookings")
+  completedBookings Int          @default(0) @map("completed_bookings")
+  cancelledBookings Int          @default(0) @map("cancelled_bookings")
+  occupancyRatePct  Decimal      @default(0) @db.Decimal(5, 2) @map("occupancy_rate_pct")
+  grossRevenue      Decimal      @default(0) @db.Decimal(12, 2) @map("gross_revenue")
+  netRevenue        Decimal      @default(0) @db.Decimal(12, 2) @map("net_revenue")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  owner             OwnerProfile @relation(fields: [ownerId], references: [id])
+
+  @@unique([ownerId, snapshotDate])
+  @@map("owner_analytics_snapshots")
+}
+
+model CommissionMilestone {
+  id                String              @id @default(uuid())
+  professionalId    String              @map("professional_id")
+  monthYear         String              @map("month_year") // "YYYY-MM"
+  completedBookings Int                 @default(0) @map("completed_bookings")
+  milestoneReached  Boolean             @default(false) @map("milestone_reached")
+  milestoneThreshold Int                @map("milestone_threshold")
+  newCommissionRate Decimal?            @db.Decimal(5, 2) @map("new_commission_rate")
+  appliedAt         DateTime?           @map("applied_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  professional      ProfessionalProfile @relation(fields: [professionalId], references: [id])
+
+  @@unique([professionalId, monthYear])
+  @@map("commission_milestones")
+}
+
+model ClientFavorite {
+  id             String              @id @default(uuid())
+  clientId       String              @map("client_id")
+  professionalId String              @map("professional_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  client         ClientProfile       @relation(fields: [clientId], references: [id])
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+
+  @@unique([clientId, professionalId])
+  @@index([professionalId])
+  @@map("client_favorites")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  AUDIT LOG
+// ═══════════════════════════════════════════════════════════
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?  @map("actor_user_id")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String?  @map("entity_id")
+  beforeState Json?    @map("before_state")
+  afterState  Json?    @map("after_state")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor       User?    @relation(fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}

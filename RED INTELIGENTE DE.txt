@@ -1,0 +1,117 @@
+RED INTELIGENTE DE
+ESPACIOS FLEXIBLES
+Plan de Organización y Desarrollo
+
+Aguirre  •  Cabanilla  •  Filippin
+3 desarrolladores  •  6 meses  •  Stack: NestJS + Next.js + React Native
+
+1. Resumen Ejecutivo
+Este documento define el plan completo de organización, roles, fases de desarrollo y criterios de inicio para llevar el proyecto desde cero hasta la entrega final en 6 meses. El objetivo principal es tener el 80% del sistema funcional para noviembre, con clientes reales (barberías) validando el producto.
+
+Ítem	Detalle
+Equipo	Aguirre, Cabanilla, Filippin — 3 devs avanzados
+Duración	24 semanas (6 meses)
+Fases	4 fases: Cimientos → Core → Transaccional → Piloto
+Stack	NestJS · PostgreSQL · MongoDB · Next.js · React Native
+Meta	80% funcional en producción con barberías reales para noviembre
+
+2. División de Roles
+Cada integrante es "dueño" de su área pero colabora en las demás. Los roles no son rígidos — se apoyan constantemente, especialmente en la Fase 2.
+
+Dev	Rol	Tecnologías	Responsabilidades clave
+Dev 1	Backend Lead	NestJS · PostgreSQL · TypeORM	Lógica de negocio, triangulación de agendas, split de pagos, auth
+Dev 2	Mobile Lead	React Native · Expo	App cliente final: reservas, pagos, gamificación, notificaciones
+Dev 3	Fullstack + Infra	Next.js · MongoDB · Railway	Panel propietario/profesional, deploy, integraciones, MongoDB
+
+3. Fases de Desarrollo
+FASE 1 — Cimientos  (Semanas 1–3)
+🎯  Objetivo: Que los 3 devs arranquen desde la misma base sin bloquearse entre sí.
+⚠️  Esta fase es crítica. Si no acuerdan el esquema de DB y los contratos de API acá, después se bloquean.
+
+Sem	Tarea	Responsable	Entregable
+1	Crear repo GitHub, estructura de carpetas, Git Flow, instalar NestJS con módulos vacíos	Dev 1 + Dev 3	Repo configurado y funcionando
+1	Wireframes de las 3 apps en Figma (propietario, profesional, cliente)	Dev 2 + Dev 3	Figma con flujos principales
+2	Diseño del esquema completo de base de datos (PostgreSQL + MongoDB) — REUNIÓN DE LOS 3	Los 3 juntos	Diagrama ER + esquema Mongo documentado
+2	Definir y documentar todos los endpoints de la API en Swagger	Dev 1 + Dev 3	Contrato de API acordado
+3	Configurar Railway/Render, CI/CD básico con GitHub Actions, variables de entorno	Dev 3	Deploy automático funcionando
+3	Armar tablero Notion/GitHub Projects con todas las tareas del proyecto	Los 3 juntos	Tablero kanban activo
+
+FASE 2 — Core del Sistema  (Semanas 4–8)
+🎯  Objetivo: Resolver lo más difícil primero. Si la triangulación de agendas funciona, el resto es más simple.
+💡  El algoritmo de triangulación es el feature más complejo y el corazón del proyecto. No dejarlo para el final.
+
+Sem	Tarea	Responsable	Entregable
+4	Auth completo: registro, login, roles (propietario / profesional / cliente / admin)	Dev 1	Login y roles funcionando
+4-5	Módulo Propietario: ABM de espacios, configuración de disponibilidad y precios	Dev 3	CRUD de espacios completo
+5-7	Algoritmo de triangulación de agendas (cruce de: agenda cliente + disponibilidad profesional + calendario espacio físico)	Dev 1 + Dev 3	Sin double-booking en pruebas de concurrencia
+6	Módulo Profesional: onboarding, carga de documentos, perfil público (URL)	Dev 3	URL pública del profesional activa
+7-8	App cliente: búsqueda de profesionales, visualización de disponibilidad, primeras reservas sin pago	Dev 2	Reserva de turno end-to-end (sin pago)
+8	Pruebas de integración entre los 3 módulos — revisión conjunta	Los 3 juntos	Flujo completo sin pagos funcionando
+
+FASE 3 — Motor Transaccional  (Semanas 9–13)
+🎯  Objetivo: Integrar todo lo que involucra dinero, notificaciones y métricas.
+⚠️  Mercado Pago en modo producción requiere aprobación que puede tardar días. Iniciar el proceso en la semana 9.
+
+Sem	Tarea	Responsable	Entregable
+9	Integración con Mercado Pago: cobro al cliente, modo sandbox primero	Dev 1	Pago en sandbox funcionando
+9-10	Split de pagos automático: propietario / plataforma / profesional en una sola transacción	Dev 1	Split verificado en sandbox
+10	Lógica de penalización por no-show (RN-03): cobro automático al cliente que no asiste	Dev 1	Penalización aplicada in pruebas
+11	Notificaciones push con Firebase: confirmación de turno, recordatorios, alertas	Dev 2	Push notifications en dispositivo real
+12	Dashboard analítico para propietario: métricas de ingresos, ocupación, historial de reservas	Dev 3	Dashboard con gráficos reales
+12-13	Sistema de gamificación: puntos por servicio completado, canje de beneficios (ruleta)	Dev 2 + Dev 3	Puntos asignados y canjeados en pruebas
+
+FASE 4 — Piloto con Barberías  (Semanas 14–24)
+🎯  Objetivo: Poner el sistema en manos reales, corregir lo que aparezca y preparar la presentación final.
+💡  Los clientes reales van a pedir cambios al ver el sistema. Dejar buffer de al menos 3 semanas para esto.
+
+Sem	Tarea	Responsable	Entregable
+14	Deploy en ambiente de producción real (Railway), activar Mercado Pago producción	Dev 3	Sistema en producción accesible
+14-15	Onboarding de barberos y propietarios reales: crear perfiles, cargar espacios, configurar precios	Los 3 juntos	Al menos 2 barberías activas
+15-17	Primeras reservas y pagos reales con clientes de las barberías	Los 3 juntos	10+ transacciones reales completadas
+17-19	Corrección de bugs críticos y ajustes de UX basados en feedback real de usuarios	Los 3 juntos	Lista de bugs resueltos
+19-22	Documentación técnica completa: arquitectura, API, decisiones de diseño, manual de usuario	Dev 1 + Dev 3	Documentación entregable
+22-24	Preparación y ensayo de la presentación final, cierre del proyecto	Los 3 juntos	Presentación lista para defensa
+
+4. Por Dónde Empezar — Primera Semana
+Esta es la secuencia exacta de la primera semana. El orden importa: no arranquen a codear hasta tener la base acordada entre los tres.
+
+Día	Acción	Resultado
+Día 1	Crear organización en GitHub, repo monorepo con carpetas /backend /frontend-web /mobile. Definir la estrategia de ramas: main → develop → feature/xxx	Todos pueden pushear sin pisarse
+Día 1	Dev 1 instala NestJS y crea los 4 módulos vacíos: PropietarioModule, ProfesionalModule, ClienteModule, CoreModule	Estructura del backend lista
+Día 2	Dev 2 y Dev 3 abren Figma y trazan los flujos principales: reservar turno, registrar espacio, onboarding profesional	Wireframes que guían el desarrollo
+Día 3	REUNIÓN DE LOS 3: diseñar el esquema de base de datos completo. Definir tablas PostgreSQL y colecciones MongoDB. Esta es la reunión más importante del proyecto.	Esquema de DB acordado y documentado
+Día 4	Dev 1 documenta todos los endpoints de la API en Swagger. Dev 3 configura Railway + GitHub Actions para deploy automático	Contrato de API + deploy automático
+Día 5	Armar el tablero en Notion o GitHub Projects con todas las tareas organizadas por fase. Cada tarea asignada, con fecha estimada y criterio de "hecho"	Tablero kanban activo desde la semana 2
+
+5. Herramientas de Gestión
+
+Herramienta	Para qué	Por qué esta
+GitHub + Git Flow	Control de versiones, code review, CI/CD	Rama por feature, PRs obligatorios a develop
+Notion	Documentación, decisiones técnicas, tareas	Todo el conocimiento del proyecto en un solo lugar
+Figma	Diseño de pantallas y flujos UX	Gratis, colaborativo, estándar de la industria
+Swagger (auto)	Documentación de la API REST	NestJS lo genera automáticamente desde el código
+Discord / Slack	Comunicación diaria del equipo	Canal por tema: #backend #mobile #infra #general
+
+6. Riesgos Principales y Cómo Mitigarlos
+
+#	Riesgo	Impacto	Mitigación
+1	El algoritmo de triangulación de agendas resulta más complejo de lo esperado	Alto — bloquea el flujo principal de reservas	Atacarlo en Fase 2 (semanas 5-7), no al final. Dev 1 y Dev 3 trabajarlo juntos.
+2	Mercado Pago tarda en aprobar la cuenta de producción	Medio — retrasa la Fase 4 con dinero real	Iniciar el proceso de alta en MP desde la semana 9, en paralelo con el sandbox.
+3	Los clientes reales (barberías) piden features no planificados	Medio — consume tiempo de corrección de bugs	Dejar buffer de 3 semanas en la Fase 4. Decir no a features fuera de alcance.
+4	Sin contrato de API acordado, front y back se bloquean mutuamente	Alto — paraliza el desarrollo en paralelo	Definir todos los endpoints en Swagger en la semana 2, antes de codear cualquier pantalla.
+
+7. Reglas del Equipo
+Acuerdos mínimos para no perder tiempo en fricciones evitables:
+
+•	Ningún código va directo a main. Todo pasa por una rama feature/xxx → PR → review de al menos 1 compañero → merge a develop.
+•	Reunión semanal de 30 minutos todos los lunes: qué hice, qué voy a hacer, qué me bloquea.
+•	Si algo tarda más de 2 días sin avance, avisar al equipo antes de seguir solo.
+•	Las decisiones técnicas importantes se documentan en Notion el mismo día que se toman.
+•	El esquema de base de datos no se modifica sin que los 3 estén de acuerdo.
+•	Los commits siguen la convención: feat: / fix: / docs: / refactor: para mantener el historial limpio.
+
+✅  Con este plan, 6 meses son más que suficientes para 3 devs avanzados.
+✅  La clave es resolver lo difícil primero (triangulación de agendas) y no dejar los pagos para el final.
+✅  El piloto con barberías reales es el mayor diferencial del proyecto frente al tribunal.
+💡  Lo más importante de la primera semana: el esquema de DB y el contrato de API. Si eso está acordado, el desarrollo en paralelo fluye solo.
+

@@ -1,0 +1,822 @@
+═══════════════════════════════════════════════════════════════════════════════
+                   INFORME DE TESIS — TuHora
+        Red Inteligente de Espacios Flexibles para Profesionales
+   Aguirre · Cabanilla · Filippin · UCC · Ingeniería en Sistemas · 2026
+═══════════════════════════════════════════════════════════════════════════════
+
+Última actualización: 2026-05-09
+Autor del informe técnico: equipo de desarrollo
+
+
+───────────────────────────────────────────────────────────────────────────────
+ÍNDICE
+───────────────────────────────────────────────────────────────────────────────
+
+1. RESUMEN DEL PROYECTO
+2. ARQUITECTURA GENERAL
+3. FRONTEND — qué se usa, por qué, y cómo
+   3.1 Stack y por qué cada pieza
+   3.2 Estructura de carpetas
+   3.3 Pantallas (screens) — qué hace cada una
+   3.4 Componentes reutilizables
+   3.5 Estado, navegación y simulador de teléfono
+   3.6 Sistema de diseño (colores, tipografía, layout)
+   3.7 Validaciones y seguridad de UI ya aplicadas
+4. BASE DE DATOS — modelado y por qué de cada tabla
+   4.1 Filosofía del modelo
+   4.2 Tablas principales y relaciones
+   4.3 Algoritmo de triangulación (cliente · profesional · espacio)
+5. BACKEND — qué se usa, por qué, y cómo
+   5.1 Stack y por qué cada pieza
+   5.2 Estructura de carpetas y módulos
+   5.3 Auth (registro, login, refresh, logout)
+   5.4 Users (perfiles, búsqueda de profesionales)
+   5.5 Spaces (CRUD de espacios y disponibilidad)
+   5.6 Bookings (turnos + solicitudes + triangulación)
+   5.7 Decoradores y guards comunes
+   5.8 Cómo se levanta el backend paso a paso
+6. ESTADO ACTUAL — qué está hecho y qué falta
+7. PRÓXIMOS PASOS — roadmap detallado
+8. GUÍA DE COLABORACIÓN PARA EL EQUIPO
+9. GLOSARIO
+
+
+───────────────────────────────────────────────────────────────────────────────
+1. RESUMEN DEL PROYECTO
+───────────────────────────────────────────────────────────────────────────────
+
+TuHora es una plataforma móvil que conecta tres roles:
+
+  · CLIENTES         → reservan turnos con profesionales independientes.
+  · PROFESIONALES    → barberos, esteticistas, dentistas, etc., que NO tienen
+                       local propio y necesitan un espacio para atender.
+  · PROPIETARIOS     → personas con espacios físicos (sillones, consultorios,
+                       boxes) que alquilan por hora a profesionales.
+
+La aplicación funciona como un "Airbnb de espacios + Uber de turnos":
+
+  ▸ El cliente busca al profesional, no al lugar.
+  ▸ El profesional alquila el espacio que mejor le quede según horario y zona.
+  ▸ El propietario monetiza horas vacías de su local.
+  ▸ La plataforma cobra una comisión de cada transacción (configurable por
+    profesional en `commissionRate`).
+
+Diferenciadores frente a la competencia (Booksy, Fresha):
+
+  · Triangulación automática: el sistema cruza disponibilidad de cliente,
+    profesional y espacio en una sola consulta y devuelve los slots libres.
+  · Validación de identidad (KYC) obligatoria para profesionales.
+  · Gamificación: puntos, niveles (Bronce/Plata/Oro/Platino/Diamante), ruleta.
+  · Pagos con split automático (Mercado Pago) — pendiente de implementar.
+
+
+───────────────────────────────────────────────────────────────────────────────
+2. ARQUITECTURA GENERAL
+───────────────────────────────────────────────────────────────────────────────
+
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │                          CLIENTE MÓVIL                                │
+  │   React Native (futuro)  ←  hoy se simula con Vite + iframe 390×844   │
+  └────────────────────────────────┬──────────────────────────────────────┘
+                                   │ HTTP/JSON (REST)
+                                   ▼
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │                     API BACKEND (NestJS · /api/v1)                    │
+  │     auth · users · spaces · bookings · (próx: payments, notif.)       │
+  │                  Validación: class-validator · DTOs                   │
+  │                  Auth: JWT (access + refresh) · Passport              │
+  └────────────────────────────────┬──────────────────────────────────────┘
+                                   │ Prisma ORM
+                                   ▼
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │                     PostgreSQL 16 (Docker)                            │
+  │   34 tablas — usuarios, perfiles, espacios, turnos, sesiones, etc.    │
+  └───────────────────────────────────────────────────────────────────────┘
+
+Decisiones clave:
+
+  · Monorepo con dos carpetas: /frontend y /backend (independientes pero en
+    el mismo repositorio). Permite compartir tipos en el futuro y tener un
+    solo historial git.
+  · REST en vez de GraphQL → más simple, mejor cacheo HTTP, suficiente para
+    la complejidad actual. Si en el futuro las consultas anidadas crecen,
+    se puede añadir GraphQL como capa adicional.
+  · PostgreSQL en lugar de MongoDB → datos altamente relacionales (un turno
+    referencia cliente, profesional, espacio, servicio, sesión, etc.).
+    Las foreign keys e integridad referencial son críticas en este negocio.
+  · Prisma como ORM → tipado fuerte (TypeScript), migraciones declarativas,
+    y studio web gratis para ver datos en desarrollo.
+  · Docker Compose para Postgres → cualquier integrante del equipo levanta
+    la base en 1 comando, sin instalar Postgres en su máquina.
+
+
+───────────────────────────────────────────────────────────────────────────────
+3. FRONTEND — qué se usa, por qué, y cómo
+───────────────────────────────────────────────────────────────────────────────
+
+3.1 STACK Y POR QUÉ CADA PIEZA
+─────────────────────────────────────
+
+  ▸ React 18                    Librería UI estándar de la industria. Componentes
+                                funcionales con hooks (sin clases).
+  ▸ Vite                        Bundler ultra rápido (sustituye a Webpack/CRA).
+                                Hot Module Reload casi instantáneo.
+  ▸ TypeScript                  Tipado estático → menos bugs en runtime y
+                                autocompletado en el IDE.
+  ▸ Tailwind CSS v4             CSS utility-first. Permite estilar sin escribir
+                                CSS aparte. v4 es la última versión.
+  ▸ Radix UI                    Primitivas de componentes accesibles (modales,
+                                tooltips, switches) sin opinión visual.
+  ▸ Shadcn UI                   Sistema de diseño basado en Radix + Tailwind,
+                                con componentes copiables (no es una librería npm).
+  ▸ Lucide React                Iconos SVG (Calendar, Home, Clock, etc.).
+                                Ligero y consistente visualmente.
+  ▸ sonner                      Notificaciones tipo toast (preferido por el
+                                equipo, ver CLAUDE.md).
+
+¿Por qué esta combinación y no Next.js o React Native directo?
+  Estamos en fase de prototipo visual y validación de UX. Un proyecto Vite
+  puro es más liviano, sin SSR ni rutas server-side innecesarias. Cuando
+  llegue el momento, el código React se migra casi 1:1 a React Native.
+
+
+3.2 ESTRUCTURA DE CARPETAS
+─────────────────────────────────────
+
+  /frontend
+    ├── src/
+    │   ├── app/
+    │   │   ├── App.tsx              ← root state machine + navegación
+    │   │   ├── Phone.tsx            ← simulador de pantalla 390×844
+    │   │   ├── data.tsx             ← datos mock (PROS, SPACES, OFFERS, etc.)
+    │   │   ├── types.ts             ← tipos TS compartidos
+    │   │   ├── screens/             ← una pantalla = un archivo .tsx
+    │   │   └── components/          ← piezas reutilizables (BottomNav, Section…)
+    │   ├── styles/                  ← estilos globales
+    │   ├── imports/                 ← assets
+    │   └── main.tsx                 ← entrypoint Vite
+    ├── index.html
+    ├── vite.config.ts
+    └── package.json
+
+Filosofía: una pantalla = un archivo. Cada screen recibe props (callbacks)
+desde App.tsx y no toca el estado global directamente. Esto facilita
+testing futuro y la migración a React Navigation cuando se haga el mobile.
+
+
+3.3 PANTALLAS (SCREENS) — qué hace cada una
+─────────────────────────────────────
+
+PANTALLAS DEL CLIENTE
+  · Onboarding              Carrusel de 3 slides explicando qué es TuHora.
+  · Auth                    Login + registro con validación completa
+                             (email regex, teléfono, password ≥8, términos,
+                             toggle ojo/ojo-tachado para ver password).
+  · RoleOnboarding          Después del registro, elige rol: cliente, profesional
+                             o propietario. Si es pro o owner, lo manda a KYC.
+  · VerificationScreen      Sube DNI + selfie. Mientras está PENDING aparece
+                             como "en revisión".
+  · HomeScreen              Pantalla principal del cliente. Muestra ofertas
+                             relámpago, profesionales recomendados, accesos
+                             rápidos. Carrusel de cards horizontales.
+  · SearchScreen            Búsqueda por categoría, ubicación, especialidad.
+  · ProfessionalScreen      Perfil público de un profesional: rating, servicios,
+                             botón "Reservar" que entra al BookingFlow.
+  · BookingFlow             4 pasos: servicio → fecha → hora → confirmación.
+                             Step indicator con la marca de color índigo (#4F46E5).
+  · Confirmation            Pantalla de éxito tras reservar.
+  · Appointments            Mis turnos con tabs (próximos / pasados / cancelados).
+  · FavoritesScreen         Profesionales marcados como favoritos.
+  · NotificationsScreen     Notificaciones in-app.
+  · Points                  Puntos acumulados, nivel actual, ruleta.
+  · Profile                 Mis datos, switch de rol (si está verificado),
+                             logout.
+
+PANTALLAS DEL PROFESIONAL
+  · ProDashboard            KPIs del día: turnos, ingresos, próximos.
+  · ProAgenda               Vista de calendario con sus turnos.
+  · ProSpacesSearch         Buscador de espacios disponibles para alquilar.
+                             Toggle Lista/Mapa con pines de colores.
+                             Modal de solicitud de reserva del espacio.
+  · ProPayments             Cobros, comisiones, retiros.
+  · ProProfile              Perfil del pro, switch de rol, logout.
+
+PANTALLAS DEL PROPIETARIO
+  · OwnerDashboard          KPIs del local: ocupación, ingresos, solicitudes
+                             pendientes con botones "✓ Aprobar" y "✗ Rechazar".
+  · OwnerSpaces             CRUD de los espacios (sillones/boxes/consultorios).
+                             Configura horarios por día con toggles.
+  · OwnerRequests           Solicitudes de profesionales para usar el espacio.
+  · OwnerAnalytics          Métricas: ocupación, tendencias, top profesionales.
+
+
+3.4 COMPONENTES REUTILIZABLES
+─────────────────────────────────────
+
+  · Avatar.tsx          Círculo con inicial o foto.
+  · BottomNav.tsx       Tab bar inferior (cambia según rol).
+  · CardRow.tsx         Fila tipo "tarjeta": ícono · título · subtítulo · acción.
+  · FieldInput.tsx      Input genérico con label, error y autoComplete.
+                         Borde focus en color marca (#4F46E5).
+  · Pill.tsx            "Chips" redondeados (categorías, estados).
+  · QuickAction.tsx     Botones de acceso rápido en HomeScreen.
+  · RoleSwitcher.tsx    Selector visual de rol.
+  · Section.tsx         Wrapper con título + padding horizontal estándar.
+                         Usa `px-5`. Para listas con scroll horizontal se rompe
+                         el padding con `-mx-5` para que la card no quede
+                         "muy a la izquierda".
+  · StatusBar.tsx       Barra superior simulada de iOS.
+  · Toggle.tsx          Switch on/off accesible (role="switch" + aria-checked).
+
+
+3.5 ESTADO, NAVEGACIÓN Y SIMULADOR DE TELÉFONO
+─────────────────────────────────────
+
+App.tsx mantiene el estado global con useState:
+  - role            "client" | "professional" | "owner"
+  - isVerified      bool — si pasó KYC
+  - isPending       bool — KYC en revisión
+  - history         array de pantallas (stack de navegación)
+  - favorites       ids de pros favoritos
+  - globalPoints    puntos del cliente
+  - selectedProId   pro elegido para reservar
+  - searchCategory  filtro de búsqueda
+
+Funciones clave:
+  · go(screen)       push a la pila
+  · back()           pop
+  · switchRole(r)    bloquea cambiar a pro/owner si !isVerified
+  · logout()         resetea TODO el estado (rol, verificación, favs, puntos…)
+                      → previene que un usuario "herede" datos de otro
+
+Phone.tsx envuelve la app en un marco de 390×844 px (iPhone) para que en
+desarrollo veamos la app como en un móvil real, sin necesidad de
+React Native todavía.
+
+
+3.6 SISTEMA DE DISEÑO
+─────────────────────────────────────
+
+  Color principal de marca:  #4F46E5  (índigo 600)
+  Gradiente del header:      linear-gradient(135deg, #6366F1, #4F46E5)
+  Color de éxito:            #10B981  (verde esmeralda)
+  Color de error:            #EF4444  (rojo)
+  Tipografía:                System UI (sans-serif por defecto)
+  Tamaños comunes:           text-[12px] · text-[14px] · text-[16px] · text-[18px]
+
+Layout pattern para pantallas con CTA fijo abajo:
+  <div className="flex flex-col h-full">
+    <div className="flex-1 overflow-y-auto">  ← contenido scrolleable
+    <div className="shrink-0">                ← botón fijo
+
+Trick para listas horizontales dentro de Section:
+  <Section>                                    ← tiene px-5
+    <div className="-mx-5 overflow-x-auto">    ← rompe el padding
+      <div className="flex gap-3.5 px-5">      ← restaura padding interno
+        {cards}
+
+
+3.7 VALIDACIONES Y SEGURIDAD DE UI YA APLICADAS
+─────────────────────────────────────
+
+  ✓ Validación de email con regex en Auth.tsx
+  ✓ Validación de teléfono (formato +54...)
+  ✓ Password mínimo 8 caracteres + toggle de visibilidad
+  ✓ Checkbox de términos obligatorio
+  ✓ Botones deshabilitados durante carga (evita doble submit)
+  ✓ role="alert" en mensajes de error → accesibilidad
+  ✓ logout() resetea todo el estado (no quedan datos del usuario anterior)
+  ✓ switchRole bloqueado para usuarios no verificados
+  ✓ Botones de aprobar/rechazar con estilos inline (background explícito)
+    para evitar que el estilo nativo del navegador los haga invisibles
+  ✓ Inputs con autoComplete (email, current-password, new-password, tel)
+
+
+───────────────────────────────────────────────────────────────────────────────
+4. BASE DE DATOS — modelado y por qué de cada tabla
+───────────────────────────────────────────────────────────────────────────────
+
+4.1 FILOSOFÍA DEL MODELO
+─────────────────────────────────────
+
+  · Una tabla `users` central con tres tablas de perfiles 1:1:
+      client_profiles · professional_profiles · owner_profiles
+    Esto permite que un mismo email pueda jugar varios roles si en el futuro
+    se decide habilitarlo.
+  · IDs UUID en todas las tablas (no enteros autoincrementales) → más seguro
+    para exponer en URLs públicas y evita race conditions en sharding.
+  · Soft-delete vía campos `status` (ACTIVE/INACTIVE/DELETED) en vez de borrar
+    filas → mantiene historial para auditoría y reportes.
+  · Snapshots en `appointments` (precio, comisión, datos del pro al momento de
+    reservar) → si un servicio cambia de precio mañana, el turno de hoy
+    conserva la info correcta.
+  · Tablas de cache (caches/snapshots) opcionales para acelerar búsquedas
+    de "espacios disponibles ahora".
+
+
+4.2 TABLAS PRINCIPALES (34 en total)
+─────────────────────────────────────
+
+AUTENTICACIÓN Y SEGURIDAD
+  users                       email, passwordHash, role, status, intentos
+                               fallidos, lockoutUntil, emailVerifiedAt
+  auth_sessions               sesiones activas (refresh token rotation)
+  social_accounts             Google/Apple OAuth (futuro)
+  password_reset_tokens       enlaces de recuperación
+  verification_tokens         enlaces de verificación de email
+  device_tokens               tokens FCM/APNS para push
+  audit_logs                  trazabilidad de acciones sensibles
+
+PERFILES
+  client_profiles             nombre, apellido, puntos, nivel
+  professional_profiles       firstName, lastName, slug público, validación
+                               KYC (PENDING/APPROVED/REJECTED), commissionRate,
+                               averageRating, totalCompleted
+  owner_profiles              businessName, dirección, ciudad, autoApprove
+
+CATÁLOGO
+  categories                  Barbería, Estética, Odontología, Bienestar
+  services                    Servicios que ofrece cada profesional
+                               (nombre, duración, precio, isPopular)
+  professional_availabilities Horario semanal del pro
+  amenities                   Equipamiento de cada espacio
+                               (sillón, espejos, secador, etc.)
+
+ESPACIOS
+  spaces                      Sillones/boxes/consultorios del propietario
+  space_availabilities        Días y horarios en que el espacio está abierto
+
+TURNOS
+  appointments                Turno cliente↔profesional (con snapshot de precio)
+  appointment_services        Servicios incluidos en cada turno
+  space_requests              Profesional pide alquilar un espacio al propietario
+                               estado: PENDING/APPROVED/REJECTED
+  appointment_reminders       Cola de recordatorios (24h antes, 1h antes)
+
+RESEÑAS Y GAMIFICACIÓN
+  reviews                     Calificación post-turno (1–5 estrellas + comentario)
+  wheel_spins                 Tiradas de ruleta del cliente
+  promotions                  Cupones/descuentos
+  appointment_promotions      Cupón aplicado a un turno
+
+NOTIFICACIONES
+  notifications               In-app + push
+
+
+4.3 ALGORITMO DE TRIANGULACIÓN
+─────────────────────────────────────
+
+El corazón funcional del producto. Ubicación: bookings.service.ts → checkAvailability().
+
+ENTRADA:
+  - professionalId
+  - spaceId  (opcional, si el cliente quiere lugar específico)
+  - date     (YYYY-MM-DD)
+  - duration (minutos del servicio)
+
+PROCESO:
+  1. Lee professional_availabilities filtrando por dayOfWeek y obtiene
+     ventana horaria del pro (ej. 09:00–18:00).
+  2. Lee appointments existentes del pro ese día → conflictos.
+  3. Si spaceId: lee space_availabilities + appointments del espacio →
+     intersecta ventana horaria con la del pro (maxTime/minTime helpers).
+  4. Genera slots de 30 minutos dentro de la ventana intersectada.
+  5. Filtra los slots que se solapan con appointments existentes.
+
+SALIDA:
+  Array de strings ["09:00", "09:30", "10:00", ...]
+
+Por qué 30 minutos:
+  La mayoría de los servicios son múltiplos de 30 (corte 30 min, corte+barba
+  45 min, fade 40 min). 15 minutos sería más granular pero generaría demasiados
+  slots y la UI se ve recargada.
+
+
+───────────────────────────────────────────────────────────────────────────────
+5. BACKEND — qué se usa, por qué, y cómo
+───────────────────────────────────────────────────────────────────────────────
+
+5.1 STACK Y POR QUÉ CADA PIEZA
+─────────────────────────────────────
+
+  ▸ NestJS 10                  Framework Node.js inspirado en Angular.
+                                Estructura modular obligatoria → escala bien
+                                en proyectos grandes y con equipos.
+                                Decoradores estilo Spring/Angular para rutas.
+  ▸ TypeScript                  Tipado fuerte en backend también.
+  ▸ Prisma 5                    ORM con migraciones declarativas y cliente
+                                tipado generado a partir de schema.prisma.
+                                `prisma studio` da una UI web para ver datos.
+  ▸ PostgreSQL 16               Base relacional probada, soporte JSON, índices
+                                avanzados, FTS para búsquedas.
+  ▸ Passport + JWT              Estándar de la industria para autenticación
+                                stateless. Tokens cortos (access 15 min) +
+                                refresh tokens largos (7 días).
+  ▸ bcrypt                      Hashing de passwords (12 rounds).
+  ▸ class-validator             Decoradores para validar DTOs en runtime.
+                                Ej. @IsEmail() @MinLength(8) @IsUUID().
+  ▸ class-transformer           Convierte payloads JSON a instancias de DTO.
+  ▸ @nestjs/swagger             Documentación OpenAPI auto-generada en /docs.
+  ▸ @nestjs/throttler           Rate limiting (anti brute-force).
+  ▸ Docker Compose              Levanta Postgres en un comando.
+
+¿Por qué NestJS y no Express puro?
+  Express es minimalista pero te obliga a inventar tu propia estructura.
+  En un equipo de 3 personas con poca experiencia compartida en backend,
+  NestJS impone una estructura clara (módulos, controllers, services, DTOs)
+  y minimiza las "decisiones de arquitectura" que normalmente generan
+  inconsistencias entre miembros del equipo.
+
+¿Por qué Prisma y no TypeORM o Sequelize?
+  Prisma es declarativo: definimos el modelo en schema.prisma y el cliente
+  TS se genera solo. Las migraciones son archivos SQL versionados en git.
+  TypeORM tiene problemas históricos con migraciones automáticas en proyectos
+  grandes. Sequelize es más viejo y menos tipado.
+
+
+5.2 ESTRUCTURA DE CARPETAS Y MÓDULOS
+─────────────────────────────────────
+
+  /backend
+    ├── prisma/
+    │   ├── schema.prisma         ← 34 modelos + enums (DBML traducido)
+    │   ├── seed.ts               ← datos iniciales (owner/pro/client de prueba)
+    │   └── migrations/           ← se generan al ejecutar `db:migrate`
+    ├── src/
+    │   ├── main.ts               ← bootstrap Nest + Swagger + ValidationPipe
+    │   ├── app.module.ts         ← raíz que importa todos los módulos
+    │   ├── prisma/               ← PrismaService inyectable globalmente
+    │   ├── common/
+    │   │   ├── decorators/       ← @Public(), @Roles(), @CurrentUser()
+    │   │   └── guards/           ← RolesGuard
+    │   ├── auth/
+    │   │   ├── auth.module.ts
+    │   │   ├── auth.controller.ts
+    │   │   ├── auth.service.ts
+    │   │   ├── dto/              ← RegisterDto, LoginDto, RefreshDto
+    │   │   ├── guards/           ← JwtAuthGuard, LocalAuthGuard
+    │   │   └── strategies/       ← jwt.strategy.ts, local.strategy.ts
+    │   ├── users/
+    │   ├── spaces/
+    │   └── bookings/
+    ├── docker-compose.yml        ← Postgres 16 + PgAdmin opcional
+    ├── .env.example              ← plantilla de variables de entorno
+    ├── package.json
+    └── tsconfig.json
+
+
+5.3 MÓDULO AUTH
+─────────────────────────────────────
+
+ENDPOINTS:
+  POST /api/v1/auth/register      Crea user + perfil según rol elegido.
+  POST /api/v1/auth/login         Recibe email/password → access + refresh.
+  POST /api/v1/auth/refresh       Recibe refresh token → nuevo access token
+                                   (rotación: el refresh viejo queda invalidado).
+  POST /api/v1/auth/logout        Cierra sesión (borra el refresh de DB).
+
+LÓGICA CLAVE EN auth.service.ts:
+  · bcrypt.hash(password, 12)              → 12 rounds = ~250ms (balance OK).
+  · MAX_FAILED_ATTEMPTS = 5                → al 5to login fallido, lockout.
+  · LOCKOUT_DURATION = 15 minutos          → setea users.lockoutUntil.
+  · Tokens:
+      access  → 15 min (firmado con JWT_SECRET)
+      refresh → 7 días (almacenado hasheado en auth_sessions)
+  · Rotación de refresh: cada uso de /refresh invalida el refresh anterior
+    y emite uno nuevo → si un atacante roba un refresh y la víctima lo usa,
+    el atacante queda fuera (detectable como reutilización).
+
+ESTRATEGIAS PASSPORT:
+  · LocalStrategy: valida email/password → habilita el endpoint /login.
+  · JwtStrategy:   extrae el JWT del header Authorization, lo verifica y
+                    pone `req.user` con el usuario.
+
+GUARDS:
+  · JwtAuthGuard:   global por defecto (excepto rutas con @Public()).
+  · LocalAuthGuard: protege /login.
+  · RolesGuard:     verifica que el rol del JWT coincida con el @Roles() de
+                     la ruta.
+
+
+5.4 MÓDULO USERS
+─────────────────────────────────────
+
+ENDPOINTS:
+  GET    /api/v1/users/me                    Mi perfil completo.
+  GET    /api/v1/users/professionals         Lista pública con filtros
+                                               (categoría, ciudad, rating).
+                                               Solo devuelve isVisible=true
+                                               y validationStatus=APPROVED.
+  GET    /api/v1/users/professionals/:slug   Perfil público por slug
+                                               (ej. /lucas-rivera).
+  PATCH  /api/v1/users/me                    Editar mi perfil.
+
+DECISIONES:
+  · Búsqueda pública NO requiere autenticación (@Public()) → SEO friendly.
+  · Slug único por profesional → URLs lindas y permanentes.
+
+
+5.5 MÓDULO SPACES
+─────────────────────────────────────
+
+ENDPOINTS:
+  GET    /api/v1/spaces                       Buscar espacios disponibles
+                                                (filtros: ciudad, categoría,
+                                                fecha, duración).
+  POST   /api/v1/spaces                       [OWNER] Crear espacio.
+  GET    /api/v1/spaces/my                    [OWNER] Mis espacios.
+  GET    /api/v1/spaces/:id                   Detalle de un espacio.
+  PATCH  /api/v1/spaces/:id                   [OWNER] Actualizar.
+  DELETE /api/v1/spaces/:id                   [OWNER] Soft delete.
+  PUT    /api/v1/spaces/:id/availability      [OWNER] Configurar horarios.
+  GET    /api/v1/spaces/:id/slots             Slots libres (fecha + duración).
+
+LÓGICA EN spaces.service.ts:
+  · assertOwns(spaceId, userId) → función guard que tira ForbiddenException
+    si el espacio no pertenece al user → previene IDOR (Insecure Direct
+    Object Reference).
+  · computeSlots(space, date, duration) → lee disponibilidad + appointments
+    ocupados → genera lista de slots disponibles.
+
+
+5.6 MÓDULO BOOKINGS
+─────────────────────────────────────
+
+Es el módulo más grande y crítico. Maneja dos flujos:
+
+A) TURNOS (cliente reserva con profesional):
+  GET    /api/v1/bookings/availability                   ⭐ Triangulación.
+  POST   /api/v1/bookings/appointments                   [CLIENT] Reservar.
+  GET    /api/v1/bookings/appointments/me                [CLIENT] Mis turnos.
+  GET    /api/v1/bookings/appointments/professional      [PRO]    Turnos del pro.
+  PATCH  /api/v1/bookings/appointments/:id/cancel        Cancelar.
+  PATCH  /api/v1/bookings/appointments/:id/complete      [PRO] Marcar como hecho.
+
+B) SOLICITUDES DE ESPACIO (profesional pide al propietario):
+  POST   /api/v1/bookings/space-requests                 [PRO]    Solicitar.
+  GET    /api/v1/bookings/space-requests/owner           [OWNER]  Ver pendientes.
+  GET    /api/v1/bookings/space-requests/professional    [PRO]    Mis solicitudes.
+  PATCH  /api/v1/bookings/space-requests/:id/respond     [OWNER] Aprobar/rechazar.
+
+DECISIONES:
+  · Snapshot de precio: al crear el appointment se copia el `priceSnapshot` del
+    servicio en ese momento → si el pro sube el precio mañana, el turno de
+    ayer mantiene el precio acordado.
+  · Solo el cliente o el pro pueden cancelar (validado en service).
+  · Auto-approve opcional: owner_profiles.autoApprove=true salta el flujo
+    de espera y aprueba automáticamente las solicitudes (típico de owners
+    que confían en el marketplace).
+
+
+5.7 DECORADORES Y GUARDS COMUNES
+─────────────────────────────────────
+
+@Public()        Marca un endpoint como público (sin JWT necesario).
+                  Implementación: SetMetadata('isPublic', true).
+                  El JwtAuthGuard global lo lee y skipea la auth.
+
+@Roles(roles)    Restringe un endpoint a roles específicos.
+                  Ej: @Roles(UserRole.OWNER, UserRole.ADMIN).
+                  Funciona junto con RolesGuard.
+
+@CurrentUser()   Inyecta el usuario autenticado en el handler.
+                  Reemplaza `@Req() req` + `req.user`.
+
+RolesGuard       Lee la metadata @Roles() y compara contra req.user.role.
+
+
+5.8 CÓMO SE LEVANTA EL BACKEND PASO A PASO
+─────────────────────────────────────
+
+Pre-requisitos:
+  · Docker Desktop instalado y corriendo
+  · Node.js 20+
+  · npm
+
+Comandos (desde /backend):
+
+  1. cp .env.example .env             # editar JWT_SECRET y DATABASE_URL
+  2. docker-compose up -d              # levanta Postgres en :5432
+  3. npm install
+  4. npm run db:generate               # genera Prisma Client tipado
+  5. npm run db:migrate                # crea tablas (primera vez: prisma migrate dev)
+  6. npm run db:seed                   # carga owner/pro/client de prueba
+  7. npm run start:dev                 # NestJS en :3000 con hot reload
+
+Verificación:
+  · Swagger UI:   http://localhost:3000/docs
+  · Prisma Studio: npm run db:studio  (UI web para ver/editar datos)
+  · PgAdmin (opcional): docker-compose --profile tools up -d → :5050
+
+Usuarios de prueba (post-seed):
+  ┌─────────────┬─────────────────────┬──────────────┐
+  │ Rol         │ Email               │ Password     │
+  ├─────────────┼─────────────────────┼──────────────┤
+  │ Propietario │ owner@tuhora.app    │ TuHora123!   │
+  │ Profesional │ pro@tuhora.app      │ TuHora123!   │
+  │ Cliente     │ client@tuhora.app   │ TuHora123!   │
+  └─────────────┴─────────────────────┴──────────────┘
+
+
+───────────────────────────────────────────────────────────────────────────────
+6. ESTADO ACTUAL — qué está hecho y qué falta
+───────────────────────────────────────────────────────────────────────────────
+
+✅ COMPLETADO
+
+FRONTEND
+  ✓ Onboarding y selección de rol
+  ✓ Auth con validación completa y toggle de password
+  ✓ KYC visual (subir DNI + selfie con estado PENDING/APPROVED/REJECTED)
+  ✓ Pantallas del cliente: Home, Search, Professional, BookingFlow,
+    Confirmation, Appointments, Favorites, Notifications, Points, Profile
+  ✓ Pantallas del profesional: ProDashboard, ProAgenda, ProSpacesSearch
+    (con mapa interactivo), ProPayments, ProProfile
+  ✓ Pantallas del propietario: OwnerDashboard, OwnerSpaces, OwnerRequests,
+    OwnerAnalytics
+  ✓ Sistema de diseño coherente con color de marca #4F46E5
+  ✓ Validaciones de UI y prevención de role-bypass
+  ✓ Logout que limpia todo el estado
+
+BASE DE DATOS
+  ✓ Modelo DBML revisado y completado (34 tablas)
+  ✓ Schema.prisma traducido del DBML
+  ✓ Seed con datos de prueba
+
+BACKEND
+  ✓ Estructura NestJS armada (4 módulos: auth, users, spaces, bookings)
+  ✓ Auth completo (register, login, refresh, logout, lockout, sesiones)
+  ✓ Users (perfiles, búsqueda pública)
+  ✓ Spaces (CRUD + slots)
+  ✓ Bookings con triangulación funcionando
+  ✓ Decoradores y guards (@Public, @Roles, JwtAuthGuard, RolesGuard)
+  ✓ Swagger en /docs
+  ✓ docker-compose.yml para Postgres
+  ✓ Build pasa sin errores (nest build → 0 errors)
+
+❌ PENDIENTE
+
+  ✗ Levantar Docker y correr el backend end-to-end (verificar que migración +
+    seed + endpoints funcionan contra Postgres real)
+  ✗ Conectar el frontend al backend (reemplazar mocks en data.tsx por fetchs)
+  ✗ Módulo notifications (push + in-app, FCM)
+  ✗ Módulo payments (Mercado Pago + split automático)
+  ✗ Módulo gamification (puntos, niveles, ruleta)
+  ✗ Módulo analytics (dashboard del propietario)
+  ✗ Módulo reviews (calificaciones post-turno)
+  ✗ Migración del frontend a React Native (app móvil real)
+  ✗ Tests unitarios y de integración (Jest está configurado, faltan specs)
+  ✗ CI/CD (GitHub Actions: lint + test + build en cada PR)
+  ✗ Deploy (Railway, Render o Fly.io para backend + Vercel para web admin)
+
+
+───────────────────────────────────────────────────────────────────────────────
+7. PRÓXIMOS PASOS — roadmap detallado
+───────────────────────────────────────────────────────────────────────────────
+
+FASE 1 — Verificación end-to-end del backend  (estimado: 1–2 horas)
+─────────────────────────────────────────────────────────────────
+  1. Abrir Docker Desktop.
+  2. Desde /backend: docker-compose up -d
+  3. npm run db:migrate
+  4. npm run db:seed
+  5. npm run start:dev
+  6. Probar en /docs (Swagger):
+       · POST /auth/login  con owner@tuhora.app / TuHora123!
+       · Copiar accessToken
+       · Authorize en Swagger
+       · GET /spaces/my  → deben aparecer los 2 sillones
+       · GET /bookings/availability?professionalId=...&date=...&duration=30
+
+FASE 2 — Conectar frontend ↔ backend  (estimado: 1 semana)
+─────────────────────────────────────────────────────────────────
+  1. Instalar axios o usar fetch.
+  2. Crear /frontend/src/lib/api.ts con interceptor que añade el JWT.
+  3. Crear hooks React Query (o SWR) por dominio:
+       useLogin, useMe, useProfessionals, useAvailability, useBookings
+  4. Reemplazar gradualmente los datos en data.tsx:
+       PROS → useProfessionals()
+       SPACES → useSpaces()
+       APPOINTMENTS → useMyAppointments()
+  5. Manejar loading/error states con sonner toasts.
+
+FASE 3 — Módulos de negocio restantes  (estimado: 3–4 semanas)
+─────────────────────────────────────────────────────────────────
+
+  notifications:
+    · Setup Firebase Admin SDK.
+    · Endpoint POST /api/v1/devices para registrar tokens FCM.
+    · Cola de recordatorios (cron node-schedule o Bull) que lee
+       appointment_reminders y dispara push 24h y 1h antes.
+
+  payments:
+    · Crear cuenta Mercado Pago (sandbox para testing).
+    · Endpoint POST /api/v1/payments/checkout que crea la preferencia.
+    · Webhook /api/v1/payments/webhook que recibe el IPN y actualiza el
+       appointment a PAID.
+    · Split: la comisión va a la cuenta de TuHora; el resto se transfiere
+       al profesional vía /v1/oauth/transfers.
+
+  gamification:
+    · Trigger en appointment.status=COMPLETED → suma puntos al cliente.
+    · Endpoint POST /api/v1/wheel/spin → ruleta diaria (validar que solo
+       se puede 1 vez por día).
+    · Tabla de niveles: 0–100 BRONCE, 101–500 PLATA, etc.
+
+  reviews:
+    · Endpoint POST /api/v1/reviews (solo si appointment.status=COMPLETED y
+       el cliente es el dueño).
+    · Recalcular professional_profiles.averageRating tras cada review.
+
+  analytics:
+    · Vistas SQL agregadas (ocupación por día/semana/mes).
+    · Endpoint GET /api/v1/analytics/owner/:id devuelve JSON con KPIs.
+
+FASE 4 — Migración a React Native  (estimado: 2–3 semanas)
+─────────────────────────────────────────────────────────────────
+  · Inicializar nuevo proyecto Expo o RN CLI.
+  · Reusar lógica de hooks y API client (TS-compatible).
+  · Reescribir layout: <View> en vez de <div>, NativeWind para Tailwind.
+  · Sustituir react-router por React Navigation.
+  · Push notifications con expo-notifications.
+  · Build para Android e iOS, publicar TestFlight + Play Console interno.
+
+FASE 5 — Tests, CI/CD y deploy  (paralelo a Fase 3 idealmente)
+─────────────────────────────────────────────────────────────────
+  · Tests unitarios de services (Jest ya configurado).
+  · Tests E2E de endpoints críticos (auth, booking).
+  · GitHub Actions: lint + test + build en cada PR.
+  · Deploy backend en Railway o Fly.io (Postgres administrado).
+  · Deploy frontend de admin web en Vercel.
+  · Variables de entorno separadas: dev / staging / prod.
+
+
+───────────────────────────────────────────────────────────────────────────────
+8. GUÍA DE COLABORACIÓN PARA EL EQUIPO
+───────────────────────────────────────────────────────────────────────────────
+
+PARA EMPEZAR EN UNA MÁQUINA NUEVA
+  git clone <repo>
+  cd "Tesis TuHora"
+
+  # Frontend
+  cd frontend
+  npm install
+  npm run dev          → http://localhost:5173
+
+  # Backend (en otra terminal)
+  cd ../backend
+  cp .env.example .env
+  docker-compose up -d
+  npm install
+  npm run db:migrate
+  npm run db:seed
+  npm run start:dev    → http://localhost:3000/docs
+
+REPARTO DE TAREAS SUGERIDO (3 personas)
+  · Persona A — Frontend mobile (RN) + integración con API.
+  · Persona B — Backend (módulos restantes: payments, notifications,
+                 gamification, reviews).
+  · Persona C — DevOps + analytics + tests + documentación.
+
+FLUJO DE TRABAJO GIT
+  · main: rama estable. Solo merge desde PRs aprobados.
+  · develop: integración (opcional si son solo 3 personas).
+  · feature/<nombre>: cada feature en su rama.
+  · Naming de commits: conventional commits → feat:, fix:, docs:, refactor:.
+  · Cada PR debe pasar lint + tests antes de mergear.
+
+CONVENCIONES DE CÓDIGO
+  · TypeScript estricto. No usar `any`.
+  · PascalCase para componentes y clases. camelCase para funciones y vars.
+  · Componentes funcionales con hooks (no clases).
+  · DTOs en backend con class-validator (no objetos sueltos).
+  · No commitear .env (ya está en .gitignore).
+
+QUÉ HACER ANTES DE PEDIR REVIEW
+  ✓ npm run lint (frontend y backend) sin errores.
+  ✓ npm run build sin errores.
+  ✓ Si tocaste schema.prisma: incluir la migración generada.
+  ✓ Captura de pantalla si hay cambios visuales.
+
+
+───────────────────────────────────────────────────────────────────────────────
+9. GLOSARIO
+───────────────────────────────────────────────────────────────────────────────
+
+  CTA              Call To Action — botón principal de una pantalla.
+  DTO              Data Transfer Object — clase que valida un payload de API.
+  HMR              Hot Module Reload — recarga de módulos sin perder estado.
+  IDOR             Insecure Direct Object Reference — vulnerabilidad donde
+                    cambiando un id en la URL accedés a datos de otro usuario.
+  JWT              JSON Web Token — token firmado para autenticación stateless.
+  KYC              Know Your Customer — validación de identidad.
+  MVP              Minimum Viable Product.
+  Slot             Bloque de tiempo disponible para reservar (ej. 30 min).
+  Snapshot         Copia de un dato en un momento (ej. precio al reservar).
+  SSR              Server-Side Rendering.
+  Triangulación    Cruzar disponibilidades de cliente + pro + espacio.
+
+═══════════════════════════════════════════════════════════════════════════════
+                          FIN DEL INFORME
+═══════════════════════════════════════════════════════════════════════════════

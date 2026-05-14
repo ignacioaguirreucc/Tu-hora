@@ -1,0 +1,64 @@
+Documento de Anteproyecto: Red inteligente de espacios flexibles
+Actualmente contamos con clientes asegurados, que en este caso serían barberías con sus barberos y clientes de la misma para realizar las pruebas antes de la entrega con el 80% de noviembre.
+Problemática 
+En la actualidad, muchos profesionales independientes (odontólogos, esteticistas, barberos, especialistas en salud) encuentran casi imposible acceder a un consultorio o local propio debido a los altísimos costos de equipamiento y alquiler. Al mismo tiempo, existen dueños de locales y clínicas con una gran capacidad ociosa: camillas, sillones o despachos que pasan horas vacíos pero que siguen generando gastos de luz, impuestos y mantenimiento.
+Esta situación se agrava por la falta de un sistema que conecte estas necesidades de forma ágil. No existe una herramienta que permita al profesional elegir dónde atender según su conveniencia, que ayude al dueño a que sus sillas sean productivas y que ofrezca al cliente una experiencia moderna donde pueda seguir a su profesional de confianza sin importar el local físico.
+2. Objetivos del Proyecto
+Crear una red de conexión: Desarrollar una plataforma para que dueños de locales y profesionales independientes se encuentren y coordinen el uso de espacios de trabajo.
+Sistema de reservas flexible: Permitir que los espacios se reserven por bloques de tiempo (horas o turnos), ya sea porque el profesional tiene un cliente confirmado o simplemente porque desea alquilar el lugar para su jornada.
+Autogestión para el cliente: Brindar al cliente un portal donde pueda reservar turnos con su profesional favorito de manera automática.
+Gestión de pagos sencilla: Implementar un sistema de cobros que reparta automáticamente el dinero entre el dueño y el profesional, facilitando la transparencia financiera.
+Sistema de incentivos: Fomentar el uso de la app mediante puntos y premios para clientes, y beneficios por cumplimiento de metas para los profesionales.
+Alcance 
+El sistema abarcará el núcleo transaccional de alquileres, la gestión de agendas y el  procesamiento de pagos. Las funcionalidades se dividen por rol: 
+1. Requerimientos Funcionales (RF)
+Los requerimientos funcionales definen las capacidades específicas que el software debe proveer, divididos por los módulos de los actores del sistema.
+Módulo Propietario (Gestión de Infraestructura)
+RF-1.1 Gestión de Inventario: El sistema debe permitir al propietario dar de alta, modificar y dar de baja "Espacios Flexibles" (ej. sillón, camilla, consultorio), especificando su rubro habilitado, equipamiento y fotografías.
+RF-1.2 Motor de Disponibilidad y Pricing: El sistema debe proveer una interfaz para configurar la disponibilidad horaria de cada espacio y establecer tarifas base.
+RF-1.3 Gestión de Solicitudes: El sistema debe notificar al propietario sobre nuevas solicitudes de alquiler enviadas por profesionales, permitiéndole aprobarlas o rechazarlas.
+RF-1.4 Dashboard Analítico: El sistema debe renderizar métricas en tiempo real sobre ingresos netos generados, historial de reservas y tasa de ocupación de la infraestructura.
+Módulo Profesional (Gestión de Servicios y Logística)
+RF-2.1 Onboarding y Validación: El sistema debe permitir la creación de un perfil profesional, exigiendo la carga de documentación respaldatoria (matrículas, certificados) para su posterior verificación por la administración.
+RF-2.2 Exploración de Espacios: El sistema debe permitir la búsqueda de espacios físicos utilizando filtros de geolocalización, disponibilidad temporal, rubro y tarifa.
+RF-2.3 Enlace Público (B2C): El sistema debe generar un perfil público (URL) para cada profesional validado, donde se expongan sus servicios, tarifas y disponibilidad hacia los clientes finales.
+RF-2.4 Decisión de Locación: Ante la solicitud de un turno por parte de un cliente, el sistema debe permitir al profesional decidir si atenderá en su locación habitual o si enviará una solicitud de reserva para un nuevo espacio físico disponible.
+Módulo Cliente Final (Portal de Demanda)
+RF-3.1 Reserva de Turnos: El sistema debe permitir al cliente visualizar la disponibilidad de su profesional seleccionado y efectuar la reserva de un bloque de tiempo.
+RF-3.2 Procesamiento de Pagos: El sistema debe integrar una pasarela para procesar el pago del servicio mediante tarjeta o billetera virtual de forma anticipada o en el momento de la reserva.
+RF-3.3 Motor de Gamificación: El sistema debe calcular y asignar puntos al perfil del cliente tras cada servicio completado , permitiendo su canje por beneficios o el acceso a módulos de recompensas (ej. ruleta de descuentos).
+Módulo Core (Administración y Motor Transaccional)
+RF-4.1 Triangulación de Agendas: El algoritmo central debe cruzar la agenda del cliente, la disponibilidad del profesional y el calendario del espacio físico para evitar superposiciones (double-booking).
+RF-4.2 Split de Pagos: El sistema debe dividir automáticamente los fondos de una transacción exitosa: liquidando la tarifa de alquiler al Propietario, la comisión a la Plataforma y los honorarios restantes al Profesional.
+
+2. Requerimientos No Funcionales (RNF)
+Definen los atributos de calidad del sistema, fundamentales para garantizar la estabilidad y confianza en una plataforma transaccional.
+RNF-1 Integridad Transaccional (ACID): El motor de reservas debe garantizar atomicidad. Si falla el cobro al cliente o el dueño rechaza el espacio, toda la transacción (el turno del profesional y la reserva del espacio) debe revertirse sin dejar datos inconsistentes.
+RNF-2 Rendimiento y Concurrencia: El sistema debe soportar múltiples lecturas y escrituras simultáneas sobre la base de datos de disponibilidad, garantizando un tiempo de respuesta menor a 2 segundos en las búsquedas, incluso en horarios pico.
+RNF-3 Seguridad y Privacidad: Toda la información sensible (documentos de identidad, matrículas, tokens de pago) debe almacenarse encriptada. El sistema debe operar íntegramente bajo protocolo HTTPS.
+RNF-4 Escalabilidad Arquitectónica: El backend debe estar diseñado bajo un patrón que permita escalar horizontalmente los servicios de reservas y pagos de forma independiente ante picos de demanda.
+
+3. Reglas de Negocio (RN)
+Las restricciones lógicas que rigen el modelo económico y operativo de la plataforma.
+RN-01 Aprobación Estricta: Ningún espacio físico se considera "reservado" hasta que el Propietario no emita una confirmación explícita (ya sea manual o mediante reglas de auto-aprobación configuradas previamente).
+RN-02 Independencia Laboral: La plataforma actúa exclusivamente como intermediario tecnológico. No existe relación de dependencia entre los Profesionales, los Propietarios y la Plataforma.
+RN-03 Penalización por No-Show: El sistema debe aplicar un cobro de penalidad o retención mínima en caso de que el cliente final no asista al turno confirmado, para proteger el tiempo del profesional y el espacio del propietario.
+RN-04 Beneficios por Hitos: Los profesionales que superen el umbral definido de transacciones exitosas (ej. 50 turnos mensuales) accederán automáticamente a una reducción en el porcentaje de comisión cobrado por la plataforma.
+
+4. Delimitación y Fuera de Alcance
+Para garantizar la viabilidad del desarrollo durante el ciclo lectivo, se excluyen explícitamente del alcance del sistema:
+Gestión, trazabilidad y control de inventario de bienes consumibles o insumos (ej. productos cosméticos, insumos médicos).
+Provisión de marcos legales, resolución de disputas por daños materiales al inmueble o seguros de mala praxis profesional.
+Gestión de firmas de contratos físicos o digitalizados para alquileres a largo plazo (el enfoque es estrictamente alquiler flexible/temporal).
+
+Casos de Uso Candidatos (Visión a futuro / Innovación) 
+Estas funcionalidades disruptivas quedan fuera del alcance inicial para asegurar la  viabilidad del cuatrimestre, pero conforman el roadmap de innovación del sistema: 
+• Gestión de Sala de Espera Virtual (Notificaciones en Tiempo Real): Un sistema  que envíe alertas automáticas por WhatsApp al Cliente Final indicando si el  profesional viene demorado o si su turno está próximo, optimizando el flujo de  personas en las salas de espera físicas de los propietarios.
+• Alquiler Inteligente de Equipamiento Premium (Add-ons): Permitir que los  propietarios no solo alquilen el espacio, sino que ofrezcan "módulos extra" por  hora (ej. una máquina láser específica, un ecógrafo portátil). El sistema  gestionaría la disponibilidad de la sala y del equipo de forma independiente  pero cruzada. 
+• Matchmaking de Reemplazos de Emergencia: Si una clínica tiene una guardia  descubierta o un profesional cancela a último momento, el Propietario puede  lanzar una "alerta de oportunidad" a los Profesionales validados en la  plataforma para cubrir ese turno específico con una tarifa premium. 
+• Analítica Predictiva para Propietarios: Un módulo que analice el historial de  reservas y sugiera al propietario los "puntos calientes" de demanda (ej. "Los  consultorios odontológicos en esta zona tienen alta demanda los martes por la  tarde; sugerimos aumentar un 15% la tarifa para maximizar ganancias"). 
+
+
+GANTT
+
+

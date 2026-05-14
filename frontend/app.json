@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "TuHora",
+    "slug": "tuhora",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "tuhora",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.tuhora.mobile"
+    },
+    "android": {
+      "package": "app.tuhora.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#FAF8F3"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
