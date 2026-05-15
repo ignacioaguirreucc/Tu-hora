@@ -4,15 +4,22 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Btn, Field, Serif } from '@/components/ui';
 import { T, fonts } from '@/theme';
+import { useAuth, routeForRole } from '@/auth/AuthContext';
 
 type Tab = 'login' | 'register';
 
 export default function AuthScreen() {
   const router = useRouter();
+  const { login, loginSocial } = useAuth();
   const [tab, setTab] = useState<Tab>('login');
   const [email, setEmail] = useState('leo@gmail.com');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = () => {
+    login(email);
+    router.replace(routeForRole('client'));
+  };
 
   const handleForgotPassword = () => {
     Alert.alert(
@@ -31,7 +38,13 @@ export default function AuthScreen() {
       `Ingresá con tu cuenta de ${provider} para acceder.`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Continuar', onPress: () => router.replace('/(client)/home') },
+        {
+          text: 'Continuar',
+          onPress: () => {
+            loginSocial(provider);
+            router.replace(routeForRole('client'));
+          },
+        },
       ],
     );
   };
@@ -184,7 +197,7 @@ export default function AuthScreen() {
             size="lg"
             full
             style={{ marginTop: 22 }}
-            onPress={() => router.replace('/(client)/home')}
+            onPress={handleSubmit}
           >
             {tab === 'login' ? 'Ingresar' : 'Crear cuenta'}
           </Btn>

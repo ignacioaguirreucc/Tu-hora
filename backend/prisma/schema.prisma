@@ -31,6 +31,13 @@ enum UserStatus {
   BANNED
 }
 
+enum RoleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
 enum OAuthProvider {
   GOOGLE
   APPLE
@@ -66,6 +73,7 @@ enum DocType {
   CERTIFICADO
   HABILITACION_COMERCIAL
   CONSTANCIA_AFIP
+  SELFIE
 }
 
 enum DocStatus {
@@ -75,10 +83,16 @@ enum DocStatus {
 }
 
 enum ClientLevel {
-  BRONCE
-  PLATA
-  ORO
-  PLATINO
+  STARTER
+  STAR
+  PRO
+  ELITE
+}
+
+enum VenueStatus {
+  ACTIVE
+  INACTIVE
+  CLOSED
 }
 
 enum SpaceType {
@@ -206,8 +220,11 @@ model User {
   email               String     @unique
   passwordHash        String?    @map("password_hash")
   phone               String?
-  role                UserRole
+  firstName           String?    @map("first_name")     // nombre legal (KYC)
+  lastName            String?    @map("last_name")
+  dni                 String?    @unique                // documento de identidad (KYC, único por persona)
   status              UserStatus @default(PENDING)
+  activeRole          UserRole?  @map("active_role")    // rol activo en la UI (último switch)
   avatarUrl           String?    @map("avatar_url")
   emailVerifiedAt     DateTime?  @map("email_verified_at")
   phoneVerifiedAt     DateTime?  @map("phone_verified_at")
@@ -219,21 +236,54 @@ model User {
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
 
-  ownerProfile        OwnerProfile?
-  professionalProfile ProfessionalProfile?
-  clientProfile       ClientProfile?
-  sessions            AuthSession[]
-  socialAccounts      SocialAccount[]
-  passwordResets      PasswordResetToken[]
-  verificationTokens  VerificationToken[]
-  deviceTokens        DeviceToken[]
-  notifications       Notification[]
-  auditLogs           AuditLog[]
+  ownerProfile           OwnerProfile?
+  professionalProfile    ProfessionalProfile?
+  clientProfile          ClientProfile?
+  roleAssignments        UserRoleAssignment[]   @relation("UserRoles")
+  approvedRoleAssignments UserRoleAssignment[]  @relation("RoleApprover")
+  sessions               AuthSession[]
+  socialAccounts         SocialAccount[]
+  passwordResets         PasswordResetToken[]
+  verificationTokens     VerificationToken[]
+  deviceTokens           DeviceToken[]
+  notifications          Notification[]
+  auditLogs              AuditLog[]
+  paidTransactions       Transaction[]          @relation("PayerTransactions")
+  receivedSplits         PaymentSplit[]         @relation("RecipientSplits")
+  cancelledAppointments  Appointment[]          @relation("CancelledByUser")
+  validatedProfessionals ProfessionalProfile[]  @relation("ProValidator")
+  reviewedProDocs        ProfessionalDocument[] @relation("ProDocReviewer")
+  reviewedOwnerDocs      OwnerDocument[]        @relation("OwnerDocReviewer")
 
   @@index([email])
-  @@index([role])
   @@index([status, deletedAt])
   @@map("users")
+}
+
+// ───────────────────────────────────────────────────────────
+//  Sistema de roles múltiples — un usuario puede ser
+//  simultáneamente CLIENT, PROFESSIONAL y OWNER.
+//  Cada rol tiene su propio ciclo de KYC.
+// ───────────────────────────────────────────────────────────
+model UserRoleAssignment {
+  id              String     @id @default(uuid())
+  userId          String     @map("user_id")
+  role            UserRole
+  status          RoleStatus @default(PENDING)
+  approvedAt      DateTime?  @map("approved_at")
+  approvedById    String?    @map("approved_by") // admin que aprobó
+  rejectedAt      DateTime?  @map("rejected_at")
+  rejectionReason String?    @map("rejection_reason")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  user            User       @relation("UserRoles", fields: [userId], references: [id], onDelete: Cascade)
+  approver        User?      @relation("RoleApprover", fields: [approvedById], references: [id])
+
+  @@unique([userId, role])
+  @@index([userId, status])
+  @@index([status, role])
+  @@map("user_role_assignments")
 }
 
 model AuthSession {
@@ -320,6 +370,8 @@ model OwnerProfile {
   id            String   @id @default(uuid())
   userId        String   @unique @map("user_id")
   businessName  String   @map("business_name")
+  firstName     String?  @map("first_name")    // nombre legal del propietario (responsable)
+  lastName      String?  @map("last_name")
   cuit          String?  @unique
   businessPhone String?  @map("business_phone")
   address       String
@@ -336,8 +388,8 @@ model OwnerProfile {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  spaces              Space[]
-  spaceBookings       SpaceBooking[]
+  venues              Venue[]
+  ownerDocuments      OwnerDocument[]
   analyticsSnapshots  OwnerAnalyticsSnapshot[]
 
   @@index([city])
@@ -358,8 +410,10 @@ model ProfessionalProfile {
   instagramUrl     String?              @map("instagram_url")
   websiteUrl       String?              @map("website_url")
   validationStatus ProfValidationStatus @default(PENDING) @map("validation_status")
+  isVerified       Boolean              @default(false) @map("is_verified") // Cache de validation_status=APPROVED
   validatedAt      DateTime?            @map("validated_at")
   validatedById    String?              @map("validated_by") // FK → users.id (admin)
+  defaultVenueId   String?              @map("default_venue_id")
   commissionRate   Decimal              @default(15.00) @db.Decimal(5, 2) @map("commission_rate")
   monthlyBookings  Int                  @default(0) @map("monthly_bookings")
   commissionTier   CommissionTier       @default(STANDARD) @map("commission_tier")
@@ -369,17 +423,21 @@ model ProfessionalProfile {
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
 
-  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category         Category             @relation(fields: [categoryId], references: [id])
-  documents        ProfessionalDocument[]
-  services         ProfessionalService[]
-  availability     ProfessionalAvailability[]
-  spaceBookings    SpaceBooking[]
-  appointments     Appointment[]
-  reviews          Review[]
-  favorites        ClientFavorite[]
-  milestones       CommissionMilestone[]
-  promotions       Promotion[]
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category           Category             @relation(fields: [categoryId], references: [id])
+  defaultVenue       Venue?               @relation("DefaultVenue", fields: [defaultVenueId], references: [id])
+  validatedBy        User?                @relation("ProValidator", fields: [validatedById], references: [id])
+  documents          ProfessionalDocument[]
+  services           ProfessionalService[]
+  availability       ProfessionalAvailability[]
+  availabilityExceptions ProfessionalAvailabilityException[]
+  professionalVenues ProfessionalVenue[]
+  spaceBookings      SpaceBooking[]
+  appointments       Appointment[]
+  reviews            Review[]
+  favorites          ClientFavorite[]
+  milestones         CommissionMilestone[]
+  promotions         Promotion[]
 
   @@index([categoryId])
   @@index([isVisible, validationStatus])
@@ -391,13 +449,17 @@ model ProfessionalDocument {
   professionalId String              @map("professional_id")
   documentType   DocType             @map("document_type")
   fileUrl        String              @map("file_url")
+  fileName       String?             @map("file_name")       // "matricula_lucia.pdf"
+  fileSizeBytes  BigInt?             @map("file_size_bytes") // Verification.tsx muestra "2.3 MB"
+  mimeType       String?             @map("mime_type")       // "application/pdf"
   status         DocStatus           @default(PENDING)
-  reviewedById   String?             @map("reviewed_by") // FK → users.id (admin)
+  reviewedById   String?             @map("reviewed_by")
   reviewedAt     DateTime?           @map("reviewed_at")
   notes          String?
   createdAt      DateTime            @default(now()) @map("created_at")
 
   professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  reviewedBy     User?               @relation("ProDocReviewer", fields: [reviewedById], references: [id])
 
   @@index([professionalId])
   @@index([status])
@@ -405,17 +467,20 @@ model ProfessionalDocument {
 }
 
 model ClientProfile {
-  id             String      @id @default(uuid())
-  userId         String      @unique @map("user_id")
-  firstName      String      @map("first_name")
-  lastName       String      @map("last_name")
-  birthdate      DateTime?   @db.Date
-  pointsBalance  Int         @default(0) @map("points_balance")
-  currentLevel   ClientLevel @default(BRONCE) @map("current_level")
-  noShowCount    Int         @default(0) @map("no_show_count")
-  totalBookings  Int         @default(0) @map("total_bookings")
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  id                  String      @id @default(uuid())
+  userId              String      @unique @map("user_id")
+  firstName           String      @map("first_name")
+  lastName            String      @map("last_name")
+  birthdate           DateTime?   @db.Date
+  pointsBalance       Int         @default(0) @map("points_balance")
+  currentLevel        ClientLevel @default(STARTER) @map("current_level")
+  availableSpins      Int         @default(0) @map("available_spins")
+  nextSpinRefreshAt   DateTime?   @map("next_spin_refresh_at")
+  noShowCount         Int         @default(0) @map("no_show_count")
+  totalBookings       Int         @default(0) @map("total_bookings")
+  preferredLocale     String      @default("es-AR") @map("preferred_locale")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
 
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   appointments      Appointment[]
@@ -451,12 +516,100 @@ model Category {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  ESPACIOS
+//  LOCALES (VENUES) — RF-1.1
+// ═══════════════════════════════════════════════════════════
+
+model Venue {
+  id          String      @id @default(uuid())
+  ownerId     String      @map("owner_id")
+  name        String
+  address     String
+  city        String
+  province    String
+  country     String      @default("Argentina")
+  lat         Decimal?    @db.Decimal(9, 6)
+  lng         Decimal?    @db.Decimal(9, 6)
+  coverUrl    String?     @map("cover_url")
+  phone       String?
+  description String?
+  status      VenueStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  owner              OwnerProfile          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  spaces             Space[]
+  professionalVenues ProfessionalVenue[]
+  defaultForPros     ProfessionalProfile[] @relation("DefaultVenue")
+  appointments       Appointment[]
+  analyticsSnapshots OwnerAnalyticsSnapshot[]
+
+  @@index([ownerId])
+  @@index([lat, lng])
+  @@index([city])
+  @@index([status])
+  @@map("venues")
+}
+
+model ProfessionalVenue {
+  id             String              @id @default(uuid())
+  professionalId String              @map("professional_id")
+  venueId        String              @map("venue_id")
+  isPrimary      Boolean             @default(false) @map("is_primary")
+  joinedAt       DateTime            @default(now()) @map("joined_at")
+
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  venue          Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([professionalId, venueId])
+  @@index([venueId])
+  @@map("professional_venues")
+}
+
+model OwnerDocument {
+  id            String       @id @default(uuid())
+  ownerId       String       @map("owner_id")
+  documentType  DocType      @map("document_type")
+  fileUrl       String       @map("file_url")
+  fileName      String?      @map("file_name")
+  fileSizeBytes BigInt?      @map("file_size_bytes")
+  mimeType      String?      @map("mime_type")
+  status        DocStatus    @default(PENDING)
+  reviewedById  String?      @map("reviewed_by")
+  reviewedAt    DateTime?    @map("reviewed_at")
+  notes         String?
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  owner         OwnerProfile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  reviewedBy    User?        @relation("OwnerDocReviewer", fields: [reviewedById], references: [id])
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("owner_documents")
+}
+
+model ProfessionalAvailabilityException {
+  id             String              @id @default(uuid())
+  professionalId String              @map("professional_id")
+  exceptionDate  DateTime            @db.Date @map("exception_date")
+  isAvailable    Boolean             @default(false) @map("is_available")
+  startTime      String?             @map("start_time")
+  endTime        String?             @map("end_time")
+  reason         String?
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@unique([professionalId, exceptionDate])
+  @@map("professional_availability_exceptions")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ESPACIOS (dentro de un Venue)
 // ═══════════════════════════════════════════════════════════
 
 model Space {
   id             String      @id @default(uuid())
-  ownerId        String      @map("owner_id")
+  venueId        String      @map("venue_id")
   categoryId     String      @map("category_id")
   name           String
   spaceType      SpaceType   @map("space_type")
@@ -469,7 +622,7 @@ model Space {
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  owner          OwnerProfile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  venue          Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
   category       Category    @relation(fields: [categoryId], references: [id])
   photos         SpacePhoto[]
   amenities      SpaceAmenity[]
@@ -477,7 +630,7 @@ model Space {
   exceptions     SpaceAvailabilityException[]
   bookings       SpaceBooking[]
 
-  @@index([ownerId])
+  @@index([venueId])
   @@index([categoryId, status])
   @@map("spaces")
 }
@@ -519,7 +672,7 @@ model SpaceAvailability {
 
   space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@unique([spaceId, dayOfWeek])
+  @@index([spaceId, dayOfWeek]) // No-unique: permite turnos partidos (mañana + tarde)
   @@map("space_availability")
 }
 
@@ -556,10 +709,10 @@ model ProfessionalService {
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
 
-  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
-  category       Category            @relation(fields: [categoryId], references: [id])
-  appointments   Appointment[]
-  promotions     Promotion[]
+  professional        ProfessionalProfile  @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  category            Category             @relation(fields: [categoryId], references: [id])
+  appointmentServices AppointmentService[]
+  promotions          Promotion[]
 
   @@index([professionalId, isActive])
   @@map("professional_services")
@@ -576,7 +729,7 @@ model ProfessionalAvailability {
 
   professional   ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
 
-  @@unique([professionalId, dayOfWeek])
+  @@index([professionalId, dayOfWeek]) // No-unique: permite turnos partidos (mañana + tarde)
   @@map("professional_availability")
 }
 
@@ -584,11 +737,14 @@ model ProfessionalAvailability {
 //  RESERVAS DE ESPACIO (Profesional → Propietario)
 // ═══════════════════════════════════════════════════════════
 
+// BCNF: ownerId removido por dependencia transitiva (spaceId → space.venueId → venue.ownerId).
+// Para listar las reservas de un propietario:
+//   prisma.spaceBooking.findMany({ where: { space: { venue: { ownerId } } } })
+// El índice (venues.owner_id) + (spaces.venue_id) sostiene la query sin denorm.
 model SpaceBooking {
   id              String             @id @default(uuid())
   spaceId         String             @map("space_id")
   professionalId  String             @map("professional_id")
-  ownerId         String             @map("owner_id")
   startDatetime   DateTime           @map("start_datetime")
   endDatetime     DateTime           @map("end_datetime")
   totalHours      Decimal            @db.Decimal(4, 2) @map("total_hours")
@@ -602,15 +758,14 @@ model SpaceBooking {
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
-  space           Space              @relation(fields: [spaceId], references: [id])
+  space           Space               @relation(fields: [spaceId], references: [id])
   professional    ProfessionalProfile @relation(fields: [professionalId], references: [id])
-  owner           OwnerProfile       @relation(fields: [ownerId], references: [id])
   appointments    Appointment[]
   transactions    Transaction[]
 
   @@index([spaceId, startDatetime])
   @@index([professionalId, startDatetime])
-  @@index([ownerId, status, requestedAt])
+  @@index([status, requestedAt])
   @@map("space_bookings")
 }
 
@@ -619,31 +774,36 @@ model SpaceBooking {
 // ═══════════════════════════════════════════════════════════
 
 model Appointment {
-  id                      String            @id @default(uuid())
-  clientId                String            @map("client_id")
-  professionalId          String            @map("professional_id")
-  serviceId               String            @map("service_id")
-  spaceBookingId          String?           @map("space_booking_id")
-  startDatetime           DateTime          @map("start_datetime")
-  endDatetime             DateTime          @map("end_datetime")
-  serviceNameSnapshot     String            @map("service_name_snapshot")
-  serviceDurationSnapshot Int               @map("service_duration_snapshot")
-  servicePriceSnapshot    Decimal           @db.Decimal(10, 2) @map("service_price_snapshot")
-  addressSnapshot         String?           @map("address_snapshot")
-  status                  AppointmentStatus @default(PENDING)
-  qrCode                  String?           @unique @map("qr_code")
-  noShowPenalty           Decimal?          @db.Decimal(10, 2) @map("no_show_penalty")
-  cancellationReason      String?           @map("cancellation_reason")
-  cancelledById           String?           @map("cancelled_by") // FK → users.id
-  cancelledAt             DateTime?         @map("cancelled_at")
-  completedAt             DateTime?         @map("completed_at")
-  createdAt               DateTime          @default(now()) @map("created_at")
-  updatedAt               DateTime          @updatedAt @map("updated_at")
+  id                              String            @id @default(uuid())
+  clientId                        String            @map("client_id")
+  professionalId                  String            @map("professional_id")
+  spaceBookingId                  String?           @map("space_booking_id")
+  venueId                         String?           @map("venue_id") // Lugar real del turno (badge "OTRO LOCAL" si != default del pro)
+  startDatetime                   DateTime          @map("start_datetime")
+  endDatetime                     DateTime          @map("end_datetime")
+  totalDurationMin                Int               @map("total_duration_min")  // suma de duraciones de AppointmentService
+  totalAmount                     Decimal           @db.Decimal(10, 2) @map("total_amount") // suma de precios (con promos aplicadas)
+  addressSnapshot                 String?           @map("address_snapshot")
+  status                          AppointmentStatus @default(PENDING)
+  qrCode                          String?           @unique @map("qr_code")
+  confirmationCode                String?           @unique @map("confirmation_code") // "TH-2026-04412"
+  rescheduledFromAppointmentId    String?           @map("rescheduled_from_appointment_id")
+  noShowPenalty                   Decimal?          @db.Decimal(10, 2) @map("no_show_penalty")
+  cancellationReason              String?           @map("cancellation_reason")
+  cancelledById                   String?           @map("cancelled_by")
+  cancelledAt                     DateTime?         @map("cancelled_at")
+  completedAt                     DateTime?         @map("completed_at")
+  createdAt                       DateTime          @default(now()) @map("created_at")
+  updatedAt                       DateTime          @updatedAt @map("updated_at")
 
-  client                  ClientProfile     @relation(fields: [clientId], references: [id])
-  professional            ProfessionalProfile @relation(fields: [professionalId], references: [id])
-  service                 ProfessionalService @relation(fields: [serviceId], references: [id])
-  spaceBooking            SpaceBooking?     @relation(fields: [spaceBookingId], references: [id])
+  client                  ClientProfile        @relation(fields: [clientId], references: [id])
+  professional            ProfessionalProfile  @relation(fields: [professionalId], references: [id])
+  spaceBooking            SpaceBooking?        @relation(fields: [spaceBookingId], references: [id])
+  venue                   Venue?               @relation(fields: [venueId], references: [id])
+  cancelledBy             User?                @relation("CancelledByUser", fields: [cancelledById], references: [id])
+  rescheduledFrom         Appointment?         @relation("Reschedules", fields: [rescheduledFromAppointmentId], references: [id])
+  rescheduledTo           Appointment[]        @relation("Reschedules")
+  services                AppointmentService[]
   reminders               AppointmentReminder[]
   transactions            Transaction[]
   review                  Review?
@@ -654,9 +814,30 @@ model Appointment {
 
   @@index([clientId, startDatetime])
   @@index([professionalId, startDatetime])
+  @@index([venueId, startDatetime])
   @@index([status, startDatetime])
   @@index([qrCode])
+  @@index([confirmationCode])
   @@map("appointments")
+}
+
+// Multi-servicio en un mismo turno
+model AppointmentService {
+  id                  String              @id @default(uuid())
+  appointmentId       String              @map("appointment_id")
+  serviceId           String              @map("service_id")
+  nameSnapshot        String              @map("name_snapshot")
+  durationMinSnapshot Int                 @map("duration_min_snapshot")
+  priceSnapshot       Decimal             @db.Decimal(10, 2) @map("price_snapshot")
+  position            Int                 @default(0)
+  createdAt           DateTime            @default(now()) @map("created_at")
+
+  appointment         Appointment         @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  service             ProfessionalService @relation(fields: [serviceId], references: [id])
+
+  @@index([appointmentId])
+  @@index([appointmentId, position])
+  @@map("appointment_services")
 }
 
 model AppointmentReminder {
@@ -683,12 +864,14 @@ model Transaction {
   id                  String            @id @default(uuid())
   appointmentId       String?           @map("appointment_id")
   spaceBookingId      String?           @map("space_booking_id")
-  payerUserId         String            @map("payer_user_id") // FK → users.id (sin relación Prisma)
+  payerUserId         String            @map("payer_user_id")
   parentTransactionId String?           @map("parent_transaction_id")
   totalAmount         Decimal           @db.Decimal(10, 2) @map("total_amount")
   currency            String            @default("ARS")
   status              TransactionStatus @default(PENDING)
   paymentMethod       PaymentMethod?    @map("payment_method")
+  cardLast4           String?           @map("card_last4")      // "4421" → Confirmation.tsx
+  cardBrand           String?           @map("card_brand")      // "Mastercard"
   gatewayReference    String?           @map("gateway_reference")
   gatewayResponse     Json?             @map("gateway_response")
   idempotencyKey      String?           @unique @map("idempotency_key")
@@ -700,6 +883,7 @@ model Transaction {
 
   appointment         Appointment?      @relation(fields: [appointmentId], references: [id])
   spaceBooking        SpaceBooking?     @relation(fields: [spaceBookingId], references: [id])
+  payer               User              @relation("PayerTransactions", fields: [payerUserId], references: [id])
   parentTransaction   Transaction?      @relation("Refunds", fields: [parentTransactionId], references: [id])
   refunds             Transaction[]     @relation("Refunds")
   splits              PaymentSplit[]
@@ -707,6 +891,7 @@ model Transaction {
 
   @@index([appointmentId])
   @@index([spaceBookingId])
+  @@index([payerUserId])
   @@index([status])
   @@map("transactions")
 }
@@ -714,7 +899,7 @@ model Transaction {
 model PaymentSplit {
   id              String      @id @default(uuid())
   transactionId   String      @map("transaction_id")
-  recipientUserId String      @map("recipient_user_id") // FK → users.id (sin relación Prisma)
+  recipientUserId String      @map("recipient_user_id")
   role            SplitRole
   amount          Decimal     @db.Decimal(10, 2)
   percentage      Decimal     @db.Decimal(5, 2)
@@ -723,8 +908,10 @@ model PaymentSplit {
   createdAt       DateTime    @default(now()) @map("created_at")
 
   transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  recipient       User        @relation("RecipientSplits", fields: [recipientUserId], references: [id])
 
   @@index([transactionId])
+  @@index([recipientUserId, status])
   @@map("payment_splits")
 }
 
@@ -832,6 +1019,7 @@ model Promotion {
   endsAt             DateTime            @map("ends_at")
   maxRedemptions     Int?                @map("max_redemptions")
   currentRedemptions Int                 @default(0) @map("current_redemptions")
+  minPurchaseAmount  Decimal?            @db.Decimal(10, 2) @map("min_purchase_amount")
   isActive           Boolean             @default(true) @map("is_active")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
@@ -909,18 +1097,23 @@ model Review {
 model OwnerAnalyticsSnapshot {
   id                String       @id @default(uuid())
   ownerId           String       @map("owner_id")
+  venueId           String?      @map("venue_id") // null = agregado del owner completo
   snapshotDate      DateTime     @db.Date @map("snapshot_date")
   totalBookings     Int          @default(0) @map("total_bookings")
   completedBookings Int          @default(0) @map("completed_bookings")
   cancelledBookings Int          @default(0) @map("cancelled_bookings")
+  noShowBookings    Int          @default(0) @map("no_show_bookings")    // KPI "No-shows: 4"
   occupancyRatePct  Decimal      @default(0) @db.Decimal(5, 2) @map("occupancy_rate_pct")
   grossRevenue      Decimal      @default(0) @db.Decimal(12, 2) @map("gross_revenue")
   netRevenue        Decimal      @default(0) @db.Decimal(12, 2) @map("net_revenue")
+  avgTicketAmount   Decimal      @default(0) @db.Decimal(10, 2) @map("avg_ticket_amount") // KPI "Ticket: $6.4k"
   createdAt         DateTime     @default(now()) @map("created_at")
 
   owner             OwnerProfile @relation(fields: [ownerId], references: [id])
+  venue             Venue?       @relation(fields: [venueId], references: [id])
 
-  @@unique([ownerId, snapshotDate])
+  @@unique([ownerId, venueId, snapshotDate])
+  @@index([ownerId, snapshotDate])
   @@map("owner_analytics_snapshots")
 }
 

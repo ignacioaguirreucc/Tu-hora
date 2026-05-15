@@ -1,0 +1,466 @@
+erDiagram
+  %% ===== AUTH =====
+  User ||--o| OwnerProfile : tiene
+  User ||--o| ProfessionalProfile : tiene
+  User ||--o| ClientProfile : tiene
+  User ||--o{ UserRoleAssignment : roles
+  User ||--o{ AuthSession : sesiones
+  User ||--o{ SocialAccount : oauth
+  User ||--o{ PasswordResetToken : resets
+  User ||--o{ VerificationToken : verificacion
+  User ||--o{ DeviceToken : devices
+  User ||--o{ Notification : recibe
+  User ||--o{ AuditLog : audita
+  User ||--o{ Transaction : paga
+  User ||--o{ PaymentSplit : recibePagos
+
+  %% ===== PERFILES =====
+  OwnerProfile ||--o{ Venue : tiene
+  OwnerProfile ||--o{ OwnerDocument : KYC
+  OwnerProfile ||--o{ OwnerAnalyticsSnapshot : metricas
+
+  ProfessionalProfile ||--o{ ProfessionalService : ofrece
+  ProfessionalProfile ||--o{ ProfessionalDocument : KYC
+  ProfessionalProfile ||--o{ ProfessionalAvailability : horarios
+  ProfessionalProfile ||--o{ ProfessionalAvailabilityException : excepciones
+  ProfessionalProfile ||--o{ ProfessionalVenue : trabajaEn
+  ProfessionalProfile ||--o{ Appointment : atiende
+  ProfessionalProfile ||--o{ SpaceBooking : alquila
+  ProfessionalProfile ||--o{ Review : recibe
+  ProfessionalProfile ||--o{ ClientFavorite : favoritoDe
+  ProfessionalProfile ||--o{ CommissionMilestone : milestones
+  ProfessionalProfile ||--o{ Promotion : crea
+  ProfessionalProfile }o--|| Category : categoria
+  ProfessionalProfile }o--o| Venue : defaultVenue
+
+  ClientProfile ||--o{ Appointment : reserva
+  ClientProfile ||--o{ PointsTransaction : puntos
+  ClientProfile ||--o{ WheelSpin : giros
+  ClientProfile ||--o{ ClientFavorite : favoritos
+  ClientProfile ||--o{ Review : escribe
+  ClientProfile ||--o{ RewardRedemption : canjea
+  ClientProfile ||--o{ NoShowPenalty : penalizaciones
+
+  %% ===== CATALOGO =====
+  Category ||--o{ Space : agrupa
+  Category ||--o{ ProfessionalProfile : agrupa
+  Category ||--o{ ProfessionalService : agrupa
+
+  %% ===== VENUES =====
+  Venue ||--o{ Space : contiene
+  Venue ||--o{ ProfessionalVenue : pros
+  Venue ||--o{ Appointment : lugarDe
+  Venue ||--o{ OwnerAnalyticsSnapshot : metricas
+
+  %% ===== ESPACIOS =====
+  Space ||--o{ SpacePhoto : fotos
+  Space ||--o{ SpaceAmenity : amenities
+  Space ||--o{ SpaceAvailability : horarios
+  Space ||--o{ SpaceAvailabilityException : excepciones
+  Space ||--o{ SpaceBooking : alquileres
+
+  %% ===== RESERVAS DE ESPACIO =====
+  SpaceBooking ||--o{ Appointment : alberga
+  SpaceBooking ||--o{ Transaction : pago
+
+  %% ===== TURNOS =====
+  Appointment ||--o{ AppointmentService : servicios
+  Appointment ||--o| Review : review
+  Appointment ||--o{ Transaction : pago
+  Appointment ||--o{ AppointmentReminder : recordatorios
+  Appointment ||--o{ NoShowPenalty : penalizaciones
+  Appointment ||--o{ PointsTransaction : puntosGanados
+  Appointment ||--o{ RewardRedemption : recompensaUsada
+  Appointment ||--o{ AppointmentPromotion : promosAplicadas
+
+  AppointmentService }o--|| ProfessionalService : snapshot
+
+  %% ===== PAGOS =====
+  Transaction ||--o{ PaymentSplit : splits
+  Transaction ||--o{ NoShowPenalty : cobroPenalty
+  Transaction ||--o{ Transaction : refunds
+
+  %% ===== GAMIFICACION =====
+  Reward ||--o{ RewardRedemption : canjes
+  RewardRedemption ||--o{ WheelSpin : ruleta
+
+  %% ===== PROMOCIONES =====
+  Promotion ||--o{ AppointmentPromotion : aplicada
+  Promotion }o--o| ProfessionalService : serviceOpc
+
+  %% ===== ENTIDADES =====
+  User {
+    uuid id PK
+    string email UK
+    string firstName
+    string lastName
+    string dni UK
+    string phone
+    UserStatus status
+    UserRole activeRole
+    datetime emailVerifiedAt
+    datetime lastLoginAt
+  }
+  UserRoleAssignment {
+    uuid id PK
+    uuid userId FK
+    UserRole role
+    RoleStatus status
+    datetime approvedAt
+    string rejectionReason
+  }
+  AuthSession {
+    uuid id PK
+    uuid userId FK
+    string refreshToken UK
+    string ipAddress
+    datetime expiresAt
+    datetime revokedAt
+  }
+  SocialAccount {
+    uuid id PK
+    uuid userId FK
+    OAuthProvider provider
+    string providerUid
+  }
+  PasswordResetToken {
+    uuid id PK
+    uuid userId FK
+    string tokenHash UK
+    datetime expiresAt
+    datetime usedAt
+  }
+  VerificationToken {
+    uuid id PK
+    uuid userId FK
+    VerificationChannel channel
+    string tokenHash UK
+    datetime expiresAt
+  }
+  DeviceToken {
+    uuid id PK
+    uuid userId FK
+    string deviceToken
+    DevicePlatform platform
+    bool isActive
+  }
+  OwnerProfile {
+    uuid id PK
+    uuid userId FK
+    string businessName
+    string firstName
+    string lastName
+    string cuit UK
+    string address
+    string city
+    bool autoApprove
+  }
+  ProfessionalProfile {
+    uuid id PK
+    uuid userId FK
+    uuid categoryId FK
+    uuid defaultVenueId FK
+    string firstName
+    string lastName
+    string specialty
+    string publicSlug UK
+    ProfValidationStatus validationStatus
+    bool isVerified
+    decimal commissionRate
+    CommissionTier commissionTier
+    decimal averageRating
+    int totalReviews
+  }
+  ProfessionalDocument {
+    uuid id PK
+    uuid professionalId FK
+    DocType documentType
+    string fileUrl
+    DocStatus status
+    datetime reviewedAt
+  }
+  ClientProfile {
+    uuid id PK
+    uuid userId FK
+    string firstName
+    string lastName
+    date birthdate
+    int pointsBalance
+    ClientLevel currentLevel
+    int availableSpins
+    int noShowCount
+    int totalBookings
+  }
+  Category {
+    uuid id PK
+    string name UK
+    string slug UK
+    string iconUrl
+    string colorHex
+    bool isActive
+  }
+  Venue {
+    uuid id PK
+    uuid ownerId FK
+    string name
+    string address
+    string city
+    decimal lat
+    decimal lng
+    VenueStatus status
+  }
+  ProfessionalVenue {
+    uuid id PK
+    uuid professionalId FK
+    uuid venueId FK
+    bool isPrimary
+    datetime joinedAt
+  }
+  OwnerDocument {
+    uuid id PK
+    uuid ownerId FK
+    DocType documentType
+    string fileUrl
+    DocStatus status
+  }
+  ProfessionalAvailabilityException {
+    uuid id PK
+    uuid professionalId FK
+    date exceptionDate
+    bool isAvailable
+    string startTime
+    string endTime
+    string reason
+  }
+  Space {
+    uuid id PK
+    uuid venueId FK
+    uuid categoryId FK
+    string name
+    SpaceType spaceType
+    int capacity
+    decimal basePriceHour
+    SpaceStatus status
+    decimal averageRating
+  }
+  SpacePhoto {
+    uuid id PK
+    uuid spaceId FK
+    string url
+    bool isPrimary
+    int sortOrder
+  }
+  SpaceAmenity {
+    uuid id PK
+    uuid spaceId FK
+    string name
+  }
+  SpaceAvailability {
+    uuid id PK
+    uuid spaceId FK
+    int dayOfWeek
+    string openTime
+    string closeTime
+    bool isAvailable
+  }
+  SpaceAvailabilityException {
+    uuid id PK
+    uuid spaceId FK
+    date exceptionDate
+    bool isAvailable
+    string reason
+  }
+  ProfessionalService {
+    uuid id PK
+    uuid professionalId FK
+    uuid categoryId FK
+    string name
+    int durationMin
+    decimal price
+    bool isPopular
+    bool isActive
+  }
+  ProfessionalAvailability {
+    uuid id PK
+    uuid professionalId FK
+    int dayOfWeek
+    string startTime
+    string endTime
+    bool isAvailable
+  }
+  SpaceBooking {
+    uuid id PK
+    uuid spaceId FK
+    uuid professionalId FK
+    datetime startDatetime
+    datetime endDatetime
+    decimal totalHours
+    decimal pricePerHour
+    decimal totalAmount
+    SpaceBookingStatus status
+    bool autoApproved
+  }
+  Appointment {
+    uuid id PK
+    uuid clientId FK
+    uuid professionalId FK
+    uuid spaceBookingId FK
+    uuid venueId FK
+    datetime startDatetime
+    datetime endDatetime
+    int totalDurationMin
+    decimal totalAmount
+    AppointmentStatus status
+    string qrCode UK
+    string confirmationCode UK
+  }
+  AppointmentService {
+    uuid id PK
+    uuid appointmentId FK
+    uuid serviceId FK
+    string nameSnapshot
+    int durationMinSnapshot
+    decimal priceSnapshot
+    int position
+  }
+  AppointmentReminder {
+    uuid id PK
+    uuid appointmentId FK
+    datetime remindAt
+    ReminderChannel channel
+    ReminderStatus status
+  }
+  Transaction {
+    uuid id PK
+    uuid appointmentId FK
+    uuid spaceBookingId FK
+    uuid payerUserId FK
+    decimal totalAmount
+    string currency
+    TransactionStatus status
+    PaymentMethod paymentMethod
+    string cardLast4
+    string idempotencyKey UK
+  }
+  PaymentSplit {
+    uuid id PK
+    uuid transactionId FK
+    uuid recipientUserId FK
+    SplitRole role
+    decimal amount
+    decimal percentage
+    SplitStatus status
+  }
+  NoShowPenalty {
+    uuid id PK
+    uuid appointmentId FK
+    uuid clientId FK
+    uuid transactionId FK
+    decimal amount
+    datetime appliedAt
+  }
+  PointsTransaction {
+    uuid id PK
+    uuid clientId FK
+    uuid appointmentId FK
+    int pointsDelta
+    PointsReason reason
+    int balanceAfter
+  }
+  Reward {
+    uuid id PK
+    string name
+    int pointsCost
+    RewardType rewardType
+    decimal discountPct
+    bool isActive
+  }
+  RewardRedemption {
+    uuid id PK
+    uuid clientId FK
+    uuid rewardId FK
+    uuid appointmentId FK
+    int pointsSpent
+    datetime expiresAt
+    datetime usedAt
+  }
+  WheelSpin {
+    uuid id PK
+    uuid clientId FK
+    uuid redemptionId FK
+    int pointsCost
+    string prizeLabel
+    RewardType prizeType
+    decimal prizeValue
+  }
+  Promotion {
+    uuid id PK
+    uuid professionalId FK
+    uuid serviceId FK
+    string title
+    string promoCode UK
+    DiscountType discountType
+    decimal discountValue
+    datetime startsAt
+    datetime endsAt
+    int maxRedemptions
+  }
+  AppointmentPromotion {
+    uuid id PK
+    uuid appointmentId FK
+    uuid promotionId FK
+    decimal discountApplied
+  }
+  Notification {
+    uuid id PK
+    uuid userId FK
+    NotificationType type
+    string title
+    string body
+    bool isRead
+    string relatedEntity
+    string relatedId
+  }
+  Review {
+    uuid id PK
+    uuid appointmentId FK
+    uuid clientId FK
+    uuid professionalId FK
+    int rating
+    string comment
+    bool isPublic
+    string reply
+  }
+  OwnerAnalyticsSnapshot {
+    uuid id PK
+    uuid ownerId FK
+    uuid venueId FK
+    date snapshotDate
+    int totalBookings
+    decimal occupancyRatePct
+    decimal grossRevenue
+    decimal avgTicketAmount
+  }
+  CommissionMilestone {
+    uuid id PK
+    uuid professionalId FK
+    string monthYear
+    int completedBookings
+    bool milestoneReached
+    decimal newCommissionRate
+  }
+  ClientFavorite {
+    uuid id PK
+    uuid clientId FK
+    uuid professionalId FK
+    datetime createdAt
+  }
+  AuditLog {
+    uuid id PK
+    uuid actorUserId FK
+    string action
+    string entityType
+    string entityId
+    json beforeState
+    json afterState
+  }

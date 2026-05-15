@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View, TextInput, ViewStyle } from 'react-native';
+import { Text, View, TextInput, ViewStyle, type KeyboardTypeOptions } from 'react-native';
 import { T } from '@/theme';
 
 type Props = {
@@ -10,6 +10,8 @@ type Props = {
   trailing?: React.ReactNode;
   focused?: boolean;
   secure?: boolean;
+  keyboardType?: KeyboardTypeOptions;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   onChangeText?: (v: string) => void;
   style?: ViewStyle;
 };
@@ -22,6 +24,8 @@ export function Field({
   trailing,
   focused,
   secure,
+  keyboardType,
+  autoCapitalize,
   onChangeText,
   style,
 }: Props) {
@@ -64,6 +68,8 @@ export function Field({
           placeholderTextColor={T.hint}
           value={value}
           secureTextEntry={secure}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
           onChangeText={onChangeText}
         />
         {trailing}

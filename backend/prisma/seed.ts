@@ -42,13 +42,20 @@ async function main() {
       email: 'owner@tuhora.app',
       passwordHash: hash,
       phone: '+5491123456780',
-      role: 'OWNER',
+      firstName: 'Mario',
+      lastName: 'Cabanilla',
       status: 'ACTIVE',
+      activeRole: 'OWNER',
       emailVerifiedAt: new Date(),
       termsAcceptedAt: new Date(),
+      roleAssignments: {
+        create: [{ role: 'OWNER', status: 'APPROVED', approvedAt: new Date() }],
+      },
       ownerProfile: {
         create: {
           businessName: 'Barbería Centro',
+          firstName: 'Mario',
+          lastName: 'Cabanilla',
           address: 'Av. Corrientes 1234',
           city: 'Buenos Aires',
           province: 'CABA',
@@ -108,10 +115,15 @@ async function main() {
       email: 'pro@tuhora.app',
       passwordHash: hash,
       phone: '+5491123456781',
-      role: 'PROFESSIONAL',
+      firstName: 'Lucas',
+      lastName: 'Rivera',
       status: 'ACTIVE',
+      activeRole: 'PROFESSIONAL',
       emailVerifiedAt: new Date(),
       termsAcceptedAt: new Date(),
+      roleAssignments: {
+        create: [{ role: 'PROFESSIONAL', status: 'APPROVED', approvedAt: new Date() }],
+      },
       professionalProfile: {
         create: {
           firstName: 'Lucas',
@@ -157,16 +169,21 @@ async function main() {
       email: 'client@tuhora.app',
       passwordHash: hash,
       phone: '+5491123456782',
-      role: 'CLIENT',
+      firstName: 'Martín',
+      lastName: 'García',
       status: 'ACTIVE',
+      activeRole: 'CLIENT',
       emailVerifiedAt: new Date(),
       termsAcceptedAt: new Date(),
+      roleAssignments: {
+        create: [{ role: 'CLIENT', status: 'APPROVED', approvedAt: new Date() }],
+      },
       clientProfile: {
         create: {
           firstName: 'Martín',
           lastName: 'García',
           pointsBalance: 340,
-          currentLevel: 'PLATA',
+          currentLevel: 'STAR',
         },
       },
     },

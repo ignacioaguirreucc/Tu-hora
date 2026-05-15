@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { View, ActivityIndicator, Text, TextInput } from 'react-native';
 import { useEffect } from 'react';
 import { T, fonts } from '@/theme';
+import { AuthProvider } from '@/auth/AuthContext';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -57,26 +58,30 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: T.page },
-            animation: 'slide_from_right',
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="auth" />
-          <Stack.Screen name="verification" />
-          <Stack.Screen name="(client)" />
-          <Stack.Screen name="(pro)" />
-          <Stack.Screen name="(owner)" />
-          <Stack.Screen name="pro/[id]" />
-          <Stack.Screen name="booking" />
-          <Stack.Screen name="confirmation" options={{ animation: 'fade' }} />
-          <Stack.Screen name="points" />
-          <Stack.Screen name="notifications" />
-        </Stack>
+        <AuthProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: T.page },
+              animation: 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="index" />
+            <Stack.Screen name="auth" />
+            <Stack.Screen name="verification" />
+            <Stack.Screen name="become-pro" />
+            <Stack.Screen name="become-owner" />
+            <Stack.Screen name="(client)" />
+            <Stack.Screen name="(pro)" />
+            <Stack.Screen name="(owner)" />
+            <Stack.Screen name="pro/[id]" />
+            <Stack.Screen name="booking" />
+            <Stack.Screen name="confirmation" options={{ animation: 'fade' }} />
+            <Stack.Screen name="points" />
+            <Stack.Screen name="notifications" />
+          </Stack>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

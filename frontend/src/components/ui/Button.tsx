@@ -28,6 +28,7 @@ type Props = {
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
   full?: boolean;
+  disabled?: boolean;
   onPress?: () => void;
   style?: ViewStyle;
 };
@@ -39,6 +40,7 @@ export function Btn({
   leading,
   trailing,
   full,
+  disabled,
   onPress,
   style,
 }: Props) {
@@ -46,7 +48,8 @@ export function Btn({
   const v = variantMap[variant];
   return (
     <Pressable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       style={({ pressed }) => [
         {
           flexDirection: 'row',
@@ -60,10 +63,10 @@ export function Btn({
           borderWidth: 1,
           borderColor: v.bd,
           alignSelf: full ? 'stretch' : 'flex-start',
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-          opacity: pressed ? 0.92 : 1,
+          transform: [{ scale: pressed && !disabled ? 0.98 : 1 }],
+          opacity: disabled ? 0.5 : pressed ? 0.92 : 1,
         },
-        v.shadow ? shadows.sm : null,
+        v.shadow && !disabled ? shadows.sm : null,
         style,
       ]}
     >

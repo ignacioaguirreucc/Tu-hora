@@ -28,6 +28,8 @@ import {
   ArrowRight,
   CreditCard,
   Scissors,
+  Briefcase,
+  Store,
   type LucideProps,
 } from 'lucide-react-native';
 import { T } from '@/theme';
@@ -71,6 +73,8 @@ export const IcMore = mk(MoreHorizontal);
 export const IcArrowR = mk(ArrowRight);
 export const IcCard = mk(CreditCard);
 export const IcScissors = mk(Scissors);
+export const IcBriefcase = mk(Briefcase);
+export const IcStore = mk(Store);
 
 export const IcStarFill = ({ size = 20, color = T.accent }: IconProps) => (
   <Star size={size} color={color} fill={color} strokeWidth={0} />

@@ -15,7 +15,7 @@ import {
   type IconComponent,
 } from '@/components/icons';
 import { T, fonts } from '@/theme';
-import { CURRENT_USER } from '@/data/mock';
+import { useAuth, routeForRole, type Role } from '@/auth/AuthContext';
 
 type Row = {
   I: IconComponent;
@@ -28,8 +28,36 @@ type Row = {
 
 const stub = (title: string, msg: string) => () => Alert.alert(title, msg);
 
+const ROLE_LABELS: Record<Role, string> = {
+  client: 'Cliente',
+  pro: 'Profesional',
+  owner: 'Propietario',
+};
+
+const ALL_ROLES: Role[] = ['client', 'pro', 'owner'];
+
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, logout, switchRole, approveRoleForDemo } = useAuth();
+
+  if (!user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: T.page, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: T.muted, fontSize: 14 }}>Iniciá sesión para ver tu perfil.</Text>
+      </View>
+    );
+  }
+
+  const goToRole = (role: Role) => {
+    if (role === 'client') {
+      switchRole('client');
+    } else if (user.roles.includes(role)) {
+      switchRole(role);
+    } else {
+      approveRoleForDemo(role);
+    }
+    router.replace(routeForRole(role));
+  };
 
   const accountRows: Row[] = [
     { I: IcUser, t: 'Editar perfil', onPress: stub('Editar perfil', 'Modificá tu nombre, foto y datos personales.'), tone: T.ink },
@@ -38,19 +66,23 @@ export default function ProfileScreen() {
     { I: IcShield, t: 'Privacidad y seguridad', onPress: () => router.push('/verification'), tone: '#2854C5' },
   ];
 
+  const handleLogout = () =>
+    Alert.alert('Cerrar sesión', '¿Querés cerrar tu sesión?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Cerrar sesión',
+        style: 'destructive',
+        onPress: () => {
+          logout();
+          router.replace('/');
+        },
+      },
+    ]);
+
   const otherRows: Row[] = [
     { I: IcSparkle, t: 'Ayuda y FAQ', onPress: stub('Ayuda', 'Escribinos a soporte@tuhora.app'), tone: T.accent },
     { I: IcDoc, t: 'Términos y condiciones', onPress: stub('Términos', 'Versión 1.0 · mayo 2026'), tone: '#75716A' },
-    {
-      I: IcLogout,
-      t: 'Cerrar sesión',
-      danger: true,
-      onPress: () =>
-        Alert.alert('Cerrar sesión', '¿Querés cerrar tu sesión?', [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Cerrar sesión', style: 'destructive', onPress: () => router.replace('/') },
-        ]),
-    },
+    { I: IcLogout, t: 'Cerrar sesión', danger: true, onPress: handleLogout },
   ];
 
   const openSettings = () =>
@@ -67,7 +99,7 @@ export default function ProfileScreen() {
         <View style={{ paddingHorizontal: 20, paddingBottom: 22 }}>
           <Card pad={22} radius={22} elevation="md">
             <View style={{ alignItems: 'center' }}>
-              <Avatar name={CURRENT_USER.name} tone="ink" size={84} verified />
+              <Avatar name={user.name} tone="ink" size={84} verified />
               <Text
                 style={{
                   fontFamily: fonts.sansBold,
@@ -76,11 +108,9 @@ export default function ProfileScreen() {
                   marginTop: 14,
                 }}
               >
-                {CURRENT_USER.name}
+                {user.name}
               </Text>
-              <Text style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>
-                {CURRENT_USER.email}
-              </Text>
+              <Text style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>{user.email}</Text>
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
                 <View
                   style={{
@@ -95,7 +125,7 @@ export default function ProfileScreen() {
                 >
                   <IcSparkle size={11} color={T.accent} />
                   <Text style={{ fontSize: 12, color: T.accentInk, fontWeight: '700' }}>
-                    Nivel {CURRENT_USER.level}
+                    Nivel {user.level}
                   </Text>
                 </View>
                 <View
@@ -107,7 +137,7 @@ export default function ProfileScreen() {
                   }}
                 >
                   <Text style={{ fontSize: 12, color: T.ink, fontWeight: '700' }}>
-                    {CURRENT_USER.points} pts
+                    {user.points} pts
                   </Text>
                 </View>
               </View>
@@ -115,96 +145,87 @@ export default function ProfileScreen() {
           </Card>
         </View>
 
-        {/* Role switcher */}
+        {/* Role switcher (demo): siempre muestra los 3 roles para poder probar la app */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 22 }}>
-          <Text
-            style={{
-              fontFamily: fonts.mono,
-              fontSize: 10.5,
-              color: T.muted,
-              fontWeight: '600',
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              marginBottom: 10,
-              paddingHorizontal: 4,
-            }}
-          >
-            Cambiar rol
-          </Text>
+          <SectionLabel>Cambiar rol</SectionLabel>
           <Card pad={6} radius={14} elevation="sm">
             <View style={{ flexDirection: 'row' }}>
-              {[
-                { l: 'Cliente', go: () => router.replace('/(client)/home'), active: true },
-                { l: 'Profesional', go: () => router.replace('/(pro)/dashboard'), active: false },
-                { l: 'Propietario', go: () => router.replace('/(owner)/dashboard'), active: false },
-              ].map((r, i) => (
-                <Pressable
-                  key={i}
-                  onPress={r.go}
-                  style={{
-                    flex: 1,
-                    height: 40,
-                    borderRadius: 10,
-                    backgroundColor: r.active ? T.ink : 'transparent',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text
+              {ALL_ROLES.map((r) => {
+                const active = user.activeRole === r;
+                return (
+                  <Pressable
+                    key={r}
+                    onPress={() => goToRole(r)}
                     style={{
-                      fontSize: 12.5,
-                      fontWeight: r.active ? '700' : '500',
-                      color: r.active ? '#fff' : T.muted,
-                      letterSpacing: -0.1,
+                      flex: 1,
+                      height: 40,
+                      borderRadius: 10,
+                      backgroundColor: active ? T.ink : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
-                    {r.l}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text
+                      style={{
+                        fontSize: 12.5,
+                        fontWeight: active ? '700' : '500',
+                        color: active ? '#fff' : T.muted,
+                        letterSpacing: -0.1,
+                      }}
+                    >
+                      {ROLE_LABELS[r]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </Card>
+          <Text
+            style={{
+              fontSize: 11,
+              color: T.muted,
+              marginTop: 8,
+              paddingHorizontal: 4,
+              lineHeight: 16,
+            }}
+          >
+            Modo demo: podés cambiar de rol libremente. En producción los roles se desbloquean
+            tras la verificación de identidad.
+          </Text>
         </View>
 
         {/* Account */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 18 }}>
-          <Text
-            style={{
-              fontFamily: fonts.mono,
-              fontSize: 10.5,
-              color: T.muted,
-              fontWeight: '600',
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              marginBottom: 10,
-              paddingHorizontal: 4,
-            }}
-          >
-            Cuenta
-          </Text>
+          <SectionLabel>Cuenta</SectionLabel>
           <ProfileList rows={accountRows} />
         </View>
 
         {/* Other */}
         <View style={{ paddingHorizontal: 20 }}>
-          <Text
-            style={{
-              fontFamily: fonts.mono,
-              fontSize: 10.5,
-              color: T.muted,
-              fontWeight: '600',
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              marginBottom: 10,
-              paddingHorizontal: 4,
-            }}
-          >
-            Más
-          </Text>
+          <SectionLabel>Más</SectionLabel>
           <ProfileList rows={otherRows} />
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text
+      style={{
+        fontFamily: fonts.mono,
+        fontSize: 10.5,
+        color: T.muted,
+        fontWeight: '600',
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        marginBottom: 10,
+        paddingHorizontal: 4,
+      }}
+    >
+      {children}
+    </Text>
   );
 }
 
