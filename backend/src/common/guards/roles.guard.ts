@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { AuthUser } from '../../auth/strategies/jwt.strategy';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -14,9 +15,13 @@ export class RolesGuard implements CanActivate {
     ]);
     if (!required?.length) return true;
 
-    const { user } = context.switchToHttp().getRequest();
-    if (!required.includes(user?.role)) {
-      throw new ForbiddenException(`Acceso restringido a: ${required.join(', ')}`);
+    const { user }: { user: AuthUser } = context.switchToHttp().getRequest();
+
+    // Verificar que el rol activo del usuario está entre los requeridos
+    if (!user?.activeRole || !required.includes(user.activeRole)) {
+      throw new ForbiddenException(
+        `Acceso restringido. Rol activo requerido: ${required.join(' | ')}`,
+      );
     }
     return true;
   }

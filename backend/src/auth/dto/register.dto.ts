@@ -1,20 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
-  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
   MinLength,
 } from 'class-validator';
-import { UserRole } from '@prisma/client';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'Juan Pérez' })
+  @ApiProperty({ example: 'Juan' })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  firstName: string;
+
+  @ApiProperty({ example: 'Pérez' })
+  @IsString()
+  @IsNotEmpty()
+  lastName: string;
 
   @ApiProperty({ example: 'juan@email.com' })
   @IsEmail({}, { message: 'Ingresá un email válido' })
@@ -25,12 +28,13 @@ export class RegisterDto {
   @Matches(/^[+\d][\d\s().-]{7,}$/, { message: 'Ingresá un teléfono válido' })
   phone?: string;
 
+  @ApiPropertyOptional({ example: '38123456' })
+  @IsOptional()
+  @IsString()
+  dni?: string;
+
   @ApiProperty({ example: 'MiPass123!' })
   @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
   @IsString()
   password: string;
-
-  @ApiProperty({ enum: UserRole, example: 'CLIENT' })
-  @IsEnum(UserRole)
-  role: UserRole;
 }
